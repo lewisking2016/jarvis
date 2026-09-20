@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=jarvis
 WorkingDirectory=/home/jarvis/jarvis
-ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 8080 -H 0.0.0.0
+ExecStart=/usr/local/bin/node node_modules/next/dist/bin/next start -p 8080 -H 0.0.0.0
 Restart=always
 RestartSec=5
 # B2ats_v2: 1 GiB RAM — cap the process so npm/next spikes never OOM the box
