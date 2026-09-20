@@ -57,13 +57,12 @@ export const EXTRA_PROVIDERS: ProviderDef[] = [
     id: "nvidia",
     baseUrl: "https://integrate.api.nvidia.com/v1",
     keyEnv: "NVIDIA_API_KEY",
-    // Behavior-verified against the live NIM API (2026-09-20 probes); fastest first.
-    // gpt-oss-20b is a reasoning model — needs headroom (max_tokens >= 256) to emit content.
+    // Tool-proven against the live NIM API (2026-09-20 probes with a real tools
+    // request): only these two emit tool_calls. mistral-nemotron (narrator),
+    // gpt-oss-20b (flaky 404) and lightning (narrator) are excluded on purpose.
     models: [
       "nvidia/nemotron-3-super-120b-a12b",
-      "mistralai/mistral-nemotron",
-      "nvidia/gpt-oss-20b",
-      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3-ultra-550b-a55b",
     ],
   },
   {
