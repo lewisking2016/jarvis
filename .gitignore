@@ -16,3 +16,5 @@ port.txt
 .freebuff/
 deploy.log
 omniroute-install.log
+.vercel
+.env*

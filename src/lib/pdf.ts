@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import PDFDocument from "pdfkit";
 import { getDb } from "./db";
 
@@ -37,9 +39,13 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
 
       // letterhead
       pdf.rect(0, 0, 612, 8).fill(ACCENT);
-      pdf.fillColor(INK).font("Helvetica-Bold").fontSize(20).text("IMT GENERAL SYSTEM", 50, 40);
+      const logoPath = path.join(process.cwd(), "public", "imtblack.png");
+      if (fs.existsSync(logoPath)) {
+        try { pdf.image(logoPath, 50, 26, { height: 40 }); } catch { /* logo optional */ }
+      }
+      pdf.fillColor(INK).font("Helvetica-Bold").fontSize(20).text("IMT GENERAL SYSTEM", 100, 40);
       pdf.font("Helvetica").fontSize(9).fillColor(DIM)
-        .text("imeantech.com  ·  info@imeantech.com  ·  Nairobi, Kenya", 50, 64);
+        .text("imeantech.com  ·  info@imeantech.com  ·  Nairobi, Kenya", 100, 64);
       pdf.moveTo(50, 82).lineTo(562, 82).lineWidth(1).strokeColor(LINE).stroke();
 
       // doc meta
