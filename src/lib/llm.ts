@@ -57,15 +57,39 @@ export const EXTRA_PROVIDERS: ProviderDef[] = [
     baseUrl: "http://localhost:20128/v1",
     baseUrlEnv: "OMNIROUTE_BASE_URL",
     keyEnv: "OMNIROUTE_API_KEY",
-    // Behavior-tested order: only models that STREAM TOOL CALLS reliably (measured via
-    // the nightly self-check + live probes). Narrators and broken routes are excluded.
-    models: ["auto/best-chat", "cfp/zai-org/glm-5.2", "auto/best-fast", "cfp/openai/gpt-oss-120b"],
+    // The JARVIS combos (priority failover walks inside OmniRoute) + the federation
+    // auto-router as tail. Combo order is managed by deploy/push-omr-state.mjs.
+    models: ["jarvis-pro", "jarvis-free", "jarvis-fast", "jarvis-coder", "auto/best-chat"],
+  },
+  {
+    // FreeLLMAPI (deploy/freellm-deploy.mjs): 295 free models across 21 platforms
+    // behind one OpenAI-compatible /v1, with per-model rate-limit tracking and
+    // automatic failover. "auto" = their balanced router across all keyed platforms.
+    id: "freellmapi",
+    baseUrl: "http://localhost:3001/v1",
+    baseUrlEnv: "FREELLMAPI_BASE_URL",
+    keyEnv: "FREELLMAPI_API_KEY",
+    models: ["auto", "moonshotai/Kimi-K3"],
   },
   { id: "groq", baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY", models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b", "moonshotai/kimi-k2-instruct"] },
   { id: "cerebras", baseUrl: "https://api.cerebras.ai/v1", keyEnv: "CEREBRAS_API_KEY", models: ["llama-3.3-70b", "qwen-3-32b", "gpt-oss-120b"] },
   { id: "github-models", baseUrl: "https://models.github.ai/inference", keyEnv: "GITHUB_MODELS_TOKEN", models: ["openai/gpt-4.1-mini", "meta/Llama-4-Scout-17B-16E-Instruct", "mistral-ai/mistral-small-2503"] },
   { id: "mistral", baseUrl: "https://api.mistral.ai/v1", keyEnv: "MISTRAL_API_KEY", models: ["mistral-small-latest", "open-mistral-nemo"] },
-  { id: "nvidia", baseUrl: "https://integrate.api.nvidia.com/v1", keyEnv: "NVIDIA_API_KEY", models: ["meta/llama-3.3-70b-instruct", "qwen/qwen2.5-7b-instruct"] },
+  {
+    id: "nvidia",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    keyEnv: "NVIDIA_API_KEY",
+    // Behavior-verified against the live NIM API (2026-09-20 probes); fastest first.
+    // gpt-oss-20b is a reasoning model — needs headroom (max_tokens >= 256) to emit content.
+    models: [
+      "nvidia/nemotron-3-super-120b-a12b",
+      "nvidia/gpt-oss-20b",
+      "mistralai/mistral-nemotron",
+      "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "nvidia/nemotron-3-ultra-550b-a55b",
+      "deepseek-ai/deepseek-v4-flash-0731",
+    ],
+  },
 ];
 
 export function configuredProviders(): ProviderDef[] {

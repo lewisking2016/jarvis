@@ -43,62 +43,56 @@ const PROVIDERS = [
 
 const M = (model, providerId) => ({ kind: "model", model: `${providerId}/${model}`, providerId });
 
-/* verified-live NVIDIA heads (probed via integrate.api.nvidia.com) */
+/* NVIDIA models verified-live directly against NIM (used by the app's own
+   nvidia provider — OmniRoute's catalog check rejects some of these ids). */
 const NVIDIA_HEADS = [
   M("nemotron-3-super-120b-a12b", "nvidia"),
   M("gpt-oss-20b", "nvidia"),
-  M("nemotron-3-ultra-550b-a55b", "nvidia"),
-  M("deepseek-v4-flash-0731", "nvidia"),
 ];
 
 const COMBOS = [
   {
     name: "jarvis-pro",
+    replace: true,
     strategy: "priority",
     capabilities: { multimodal: true, reasoning: true, caching: true },
     models: [
-      M("kimi-k2.6", "moonshot"),
-      M("claude-opus-4.8", "cheaperinference"),
-      M("gpt-5.6-sol", "cheaperinference"),
-      M("gemini-3.1-pro", "cheaperinference"),
-      M("deepseek-v4-pro", "deepseek"),
-      M("glm-5.2", "cheaperinference"),
-      M("kimi-k3", "cheaperinference"),
-      M("free", "openrouter"),
-      ...NVIDIA_HEADS,
+      // VERIFIED working (probed 2026-09-20) — then recoverable capped tails
+      M("nemotron-3-super-120b-a12b", "nvidia"),
+      M("gpt-oss-20b", "nvidia"),
       M("deepseek-ai/DeepSeek-V3", "huggingface"),
+      M("kimi-k2.6", "moonshot"),           // 429 org-cap, recovers on reset
+      M("claude-opus-4.8", "cheaperinference"), // 402 wallet — returns on top-up
+      M("gpt-5.6-sol", "cheaperinference"),
+      M("free", "openrouter"),              // 429 daily cap, resets ~03:00 EAT
+      M("deepseek-v4-pro", "deepseek"),     // 401 credits — returns on top-up
     ],
   },
   {
     name: "jarvis-fast",
+    replace: true,
     strategy: "priority",
     capabilities: { multimodal: false, reasoning: true, caching: true },
     models: [
-      M("gemini-3.1-flash-lite", "cheaperinference"),
-      M("gemini-3-flash-preview", "cheaperinference"),
-      M("deepseek-flash", "deepseek"),
-      M("gpt-5.4-mini", "cheaperinference"),
-      M("kimi-k2.7-code", "moonshot"),
-      M("gpt-oss-20b", "nvidia"),
       M("nemotron-3-super-120b-a12b", "nvidia"),
-      M("glm-5.2:free", "openrouter"),
-      M("ling-3.0-flash-fin:free", "openrouter"),
+      M("gpt-oss-20b", "nvidia"),
+      M("deepseek-ai/DeepSeek-V3", "huggingface"),
+      M("kimi-k2.7-code", "moonshot"),
+      M("gemini-3.1-flash-lite", "cheaperinference"),
+      M("free", "openrouter"),
     ],
   },
   {
     name: "jarvis-coder",
+    replace: true,
     strategy: "priority",
     capabilities: { multimodal: false, reasoning: true, caching: true },
     models: [
+      M("gpt-oss-20b", "nvidia"),
+      M("deepseek-ai/DeepSeek-V3", "huggingface"),
       M("kimi-k2.7-code", "moonshot"),
       M("claude-sonnet-5", "cheaperinference"),
-      M("deepseek-v4-flash", "cheaperinference"),
-      M("gpt-5.4", "cheaperinference"),
       M("deepseek-v4-pro", "deepseek"),
-      M("deepseek-v4-flash-0731", "nvidia"),
-      M("gpt-oss-20b", "nvidia"),
-      M("north-mini-code:free", "openrouter"),
-      M("big-pickle", "opencode"),
     ],
   },
   {
@@ -109,25 +103,23 @@ const COMBOS = [
     models: [
       M("nemotron-3-super-120b-a12b", "nvidia"),
       M("gpt-oss-20b", "nvidia"),
-      M("nemotron-3-ultra-550b-a55b", "nvidia"),
-      M("deepseek-v4-flash-0731", "nvidia"),
       M("deepseek-ai/DeepSeek-V3", "huggingface"),
       M("kimi-k2.6", "moonshot"),
       M("free", "openrouter"),
-      M("glm-5.2:free", "openrouter"),
-      M("ling-3.0-flash-fin:free", "openrouter"),
+      M("gpt-5.6-sol", "cheaperinference"),
       M("deepseek-flash", "deepseek"),
     ],
   },
 ];
 
 const JARVIS_HEADS = [
+  // verified working first, then recoverable capped models
+  M("nemotron-3-super-120b-a12b", "nvidia"),
+  M("gpt-oss-20b", "nvidia"),
+  M("deepseek-ai/DeepSeek-V3", "huggingface"),
   M("kimi-k2.6", "moonshot"),
   M("claude-opus-4.8", "cheaperinference"),
-  M("gpt-5.6-sol", "cheaperinference"),
-  M("deepseek-v4-pro", "deepseek"),
-  M("gemini-3.1-flash-lite", "cheaperinference"),
-  M("nemotron-3-super-120b-a12b", "nvidia"),
+  M("free", "openrouter"),
 ];
 
 /* ── transport ──────────────────────────────────────────────────────────── */
