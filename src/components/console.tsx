@@ -1,5 +1,6 @@
 "use client";
 
+import { apiUrl } from "@/lib/apiBase";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Bubble {
@@ -32,7 +33,7 @@ export function useJarvisChat() {
     setBubbles((b) => [...b, { role: "user", text }, { role: "jarvis", text: "" }]);
     setBusy(true);
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, history: historyRef.current.slice(-30) }),
@@ -241,7 +242,7 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
       }
       void (async () => {
         try {
-          const res = await fetch("/api/voice", {
+          const res = await fetch(apiUrl("/api/voice"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: chunk }),

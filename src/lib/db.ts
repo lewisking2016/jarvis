@@ -1,12 +1,21 @@
 import { DatabaseSync } from "node:sqlite";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-export const DB_PATH = path.join(process.cwd(), "jarvis.data.sqlite");
+/**
+ * Database lives outside the repo (JARVIS_DATA_DIR, default ~/.jarvis-data) so
+ * git pulls, rebuilds and redeployments never touch operational data.
+ */
+export const DB_PATH = path.join(
+  process.env.JARVIS_DATA_DIR || path.join(process.env.HOME || process.cwd(), ".jarvis-data"),
+  "jarvis.data.sqlite"
+);
 
 let db: DatabaseSync | null = null;
 
 export function getDb(): DatabaseSync {
   if (!db) {
+    mkdirSync(path.dirname(DB_PATH), { recursive: true });
     db = new DatabaseSync(DB_PATH);
     db.exec(`
       PRAGMA journal_mode = WAL;

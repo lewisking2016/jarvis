@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiUrl } from "./apiBase";
 
 /**
  * Typed fetch that never throws raw network noise — surfaces API error bodies as
  * Error messages. Used directly for mutations and under the useApi hook for reads.
+ * Resolves relative paths against the split-architecture backend (apiBase).
  */
 export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });

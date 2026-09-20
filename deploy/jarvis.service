@@ -1,21 +1,22 @@
 [Unit]
-Description=JARVIS — IMT General System (Next.js standalone production)
+Description=JARVIS backend — IMT General System (repo build, :8080)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=jarvis
-WorkingDirectory=/opt/jarvis/.next/standalone
-ExecStart=/usr/bin/node /opt/jarvis/.next/standalone/server.js
+WorkingDirectory=/home/jarvis/jarvis
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start -p 8080 -H 0.0.0.0
 Restart=always
 RestartSec=5
-# B2ats_v2 has 1 GiB RAM — cap the process so the kernel never OOM-kills the box
-MemoryMax=700M
+# B2ats_v2: 1 GiB RAM — cap the process so npm/next spikes never OOM the box
+MemoryMax=760M
 Environment=NODE_ENV=production
 Environment=PORT=8080
 Environment=HOSTNAME=0.0.0.0
-# All other secrets are read from /opt/jarvis/.env by the app itself
+# Secrets: /home/jarvis/.env is symlinked into the repo as .env by provision-vps.sh
+# OmniRoute brain tier runs on localhost:20128 (its own autostart unit)
 
 [Install]
 WantedBy=multi-user.target
