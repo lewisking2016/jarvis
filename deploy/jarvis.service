@@ -1,0 +1,21 @@
+[Unit]
+Description=JARVIS — IMT General System (Next.js standalone production)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jarvis
+WorkingDirectory=/opt/jarvis/.next/standalone
+ExecStart=/usr/bin/node /opt/jarvis/.next/standalone/server.js
+Restart=always
+RestartSec=5
+# B2ats_v2 has 1 GiB RAM — cap the process so the kernel never OOM-kills the box
+MemoryMax=700M
+Environment=NODE_ENV=production
+Environment=PORT=8080
+Environment=HOSTNAME=0.0.0.0
+# All other secrets are read from /opt/jarvis/.env by the app itself
+
+[Install]
+WantedBy=multi-user.target
