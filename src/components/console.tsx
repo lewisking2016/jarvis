@@ -1,6 +1,7 @@
 "use client";
 
 import { apiUrl } from "@/lib/apiBase";
+import { ThinkingOrb } from "thinking-orbs";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Bubble {
@@ -27,16 +28,17 @@ export function useJarvisChat() {
   const [busy, setBusy] = useState(false);
   const historyRef = useRef<ChatMsg[]>([]);
 
-  const send = useCallback(async (message: string, onDone?: () => void) => {
+  const send = useCallback(async (message: string, onDone?: () => void, attachmentIds: number[] = []) => {
     const text = message.trim();
-    if (!text || busy) return;
-    setBubbles((b) => [...b, { role: "user", text }, { role: "jarvis", text: "" }]);
+    if ((!text && !attachmentIds.length) || busy) return;
+    const shown = text || "Analyse the attached file(s), sir.";
+    setBubbles((b) => [...b, { role: "user", text: shown }, { role: "jarvis", text: "" }]);
     setBusy(true);
     try {
       const res = await fetch(apiUrl("/api/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history: historyRef.current.slice(-30) }),
+        body: JSON.stringify({ message: text, history: historyRef.current.slice(-30), attachment_ids: attachmentIds }),
       });
       const reader = res.body?.getReader();
       const dec = new TextDecoder();
@@ -97,7 +99,7 @@ export function useJarvisChat() {
               return c;
             });
           } else if (ev.type === "done" && ev.text) {
-            historyRef.current = [...historyRef.current, { role: "user" as const, text }, { role: "model" as const, text: ev.text }].slice(-40);
+            historyRef.current = [...historyRef.current, { role: "user" as const, text: shown }, { role: "model" as const, text: ev.text }].slice(-40);
           }
         }
       }
@@ -128,6 +130,9 @@ export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listen
   setInput: (v: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<{ id: number; name: string; mime: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [chat.bubbles]);
@@ -162,7 +167,12 @@ export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listen
                 : { borderColor: "var(--line-bright)", background: "var(--bg-panel)" }}
             >
               {b.role === "jarvis" && <span className="k block mb-1" style={{ color: "var(--accent-dim)" }}>JARVIS</span>}
-              {b.text || (chat.busy && i === chat.bubbles.length - 1 ? <span className="animate-pulse">▌</span> : "")}
+              {b.text || (chat.busy && i === chat.bubbles.length - 1 ? (
+                <span className="inline-flex items-center gap-2">
+                  <ThinkingOrb state="working" size={20} theme="dark" aria-label="JARVIS is thinking" />
+                  <span className="k text-[10px]" style={{ color: "var(--ink-faint)" }}>THINKING</span>
+                </span>
+              ) : "")}
               {b.failovers && b.failovers.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {b.failovers.map((f, j) => (
@@ -182,21 +192,77 @@ export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listen
         ))}
       </div>
       <form
-        className="flex gap-2 p-3 border-t"
+        className="flex flex-col gap-2 p-3 border-t"
         style={{ borderColor: "var(--line)" }}
         onSubmit={(e) => {
           e.preventDefault();
-          chat.send(input);
+          const ids = pending.map((p) => p.id);
+          chat.send(input, undefined, ids);
           setInput("");
+          setPending([]);
         }}
       >
-        <input
-          className="input flex-1"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={listening ? "Listening…" : "Directive, sir?"}
-        />
-        <button className="btn" type="submit" disabled={chat.busy}>{chat.busy ? "···" : "SEND"}</button>
+        {pending.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {pending.map((p) => (
+              <span key={p.id} className="badge" style={{ borderColor: "var(--line)" }}>
+                {p.mime.startsWith("image/") ? "🖼" : "📄"} {p.name.slice(0, 22)}
+                <button
+                  type="button"
+                  className="ml-1 opacity-60 hover:opacity-100"
+                  onClick={() => setPending((list) => list.filter((x) => x.id !== p.id))}
+                  aria-label={`remove ${p.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn shrink-0"
+            title="Attach an image or document for JARVIS to work with"
+            disabled={uploading || chat.busy}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? "···" : "+"}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            className="hidden"
+            accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,text/csv,text/markdown,application/json"
+            multiple
+            onChange={async (e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (!files.length) return;
+              setUploading(true);
+              try {
+                for (const f of files) {
+                  const fd = new FormData();
+                  fd.append("file", f);
+                  const r = await fetch(apiUrl("/api/attachments"), { method: "POST", body: fd });
+                  if (r.ok) {
+                    const meta = (await r.json()) as { id: number; name: string; mime: string };
+                    setPending((list) => [...list, meta]);
+                  }
+                }
+              } finally {
+                setUploading(false);
+              }
+            }}
+          />
+          <input
+            className="input flex-1"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={pending.length ? "Tell JARVIS what to do with the attachment(s)…" : listening ? "Listening…" : "Directive, sir?"}
+          />
+          <button className="btn" type="submit" disabled={chat.busy || uploading}>{chat.busy ? "···" : "SEND"}</button>
+        </div>
       </form>
     </aside>
   );
@@ -402,31 +468,20 @@ export function BootOverlay({ onDone }: { onDone: () => void }) {
   );
 }
 
-export function Reactor({ state, size = 150, progress }: { state: "idle" | "listening" | "working" | "speaking" | "boot"; size?: number; progress?: number }) {
-  const colors: Record<string, string> = {
-    idle: "var(--accent)", listening: "var(--bad)", working: "var(--warn)",
-    speaking: "var(--good)", boot: "var(--accent)",
-  };
-  const c = colors[state];
-  const labels: Record<string, string> = {
-    idle: "STANDBY", listening: "LISTENING", working: "PROCESSING", speaking: "SPEAKING", boot: "BOOT",
-  };
+export function Reactor({ state, size = 64 }: { state: "idle" | "listening" | "working" | "speaking" | "boot"; size?: number; progress?: number }) {
+  // thinking-orbs (github.com/Jakubantalik/thinking-orbs) — hand-tuned canvas
+  // animations, one verb per agent state. Pinned dark theme (our HUD is dark).
+  // Size snaps to the nearest tuned preset: 64 (avatar) or 20 (inline).
+  const orbState =
+    state === "listening" ? "listening"
+    : state === "working" ? "solving"
+    : state === "speaking" ? "composing"
+    : state === "boot" ? "connecting"
+    : "breathing";
+  const tuned = size >= 40 ? 64 : 20;
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-      <div className="absolute inset-0 rounded-full border-2 border-dashed opacity-60"
-        style={{ borderColor: c, animation: "spin-slow 16s linear infinite" }} />
-      <div className="absolute inset-[12%] rounded-full border border-dotted opacity-40"
-        style={{ borderColor: c, animation: "spin-rev 10s linear infinite" }} />
-      {typeof progress === "number" && (
-        <svg className="absolute inset-0" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="46" fill="none" stroke="var(--line)" strokeWidth="2.5" />
-          <circle cx="50" cy="50" r="46" fill="none" stroke="var(--gold)" strokeWidth="2.5"
-            strokeDasharray={`${(progress / 100) * 289} 289`} strokeLinecap="round"
-            transform="rotate(-90 50 50)" style={{ filter: "drop-shadow(0 0 4px var(--gold))" }} />
-        </svg>
-      )}
-      <div className="absolute inset-[30%] rounded-full blur-md opacity-25" style={{ background: c }} />
-      <span className="k relative z-10 glow" style={{ fontSize: 9, color: c }}>{labels[state]}</span>
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }} title={`JARVIS ${state.toUpperCase()}`}>
+      <ThinkingOrb state={orbState} size={tuned} theme="dark" speed={state === "working" ? 1.4 : 1} paused={false} aria-label={`JARVIS ${state}`} />
     </div>
   );
 }

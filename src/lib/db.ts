@@ -195,6 +195,18 @@ export function getDb(): DatabaseSync {
     if (!txCols.includes("balance")) db.exec("ALTER TABLE transactions ADD COLUMN balance REAL");
     const docCols = (db.prepare("PRAGMA table_info(documents)").all() as { name: string }[]).map((c) => c.name);
     if (!docCols.includes("payment_info")) db.exec("ALTER TABLE documents ADD COLUMN payment_info TEXT");
+    // Chat attachments (images + documents the principal hands JARVIS)
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS attachments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT,
+        name TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        data BLOB NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+    );
 
     seedIdentityIfEmpty();
   }

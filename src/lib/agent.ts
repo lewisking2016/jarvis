@@ -54,6 +54,8 @@ interface RunOpts {
   history: ChatTurn[];
   onEvent: (e: AgentEvent) => void;
   signal?: AbortSignal;
+  /** Vision/file content parts for the current user turn (images, documents). */
+  attachmentParts?: Record<string, unknown>[];
 }
 
 let cachedMcpTools: McpTool[] | null = null;
@@ -221,9 +223,15 @@ async function streamOpenAIOnce(
     function: { name: t.name, description: t.description, parameters: t.parameters },
   }));
 
+    const historyTurns = budgetHistory(opts.history).map((h) => ({ role: h.role === "model" ? "assistant" : "user", content: h.text as string | Record<string, unknown>[] }));
+  // Attachments ride on the FINAL user turn as multimodal content parts (vision + file text).
+  if (opts.attachmentParts?.length && historyTurns.length && historyTurns[historyTurns.length - 1].role === "user") {
+    const last = historyTurns[historyTurns.length - 1];
+    last.content = [{ type: "text", text: String(last.content) }, ...opts.attachmentParts];
+  }
   const messages: Record<string, unknown>[] = [
     { role: "system", content: `${buildSystemPrompt()}\n\n${memoryHeader(opts.history.at(-1)?.text)}` },
-    ...budgetHistory(opts.history).map((h) => ({ role: h.role === "model" ? "assistant" : "user", content: h.text })),
+    ...historyTurns,
   ];
 
   /** Streams one round; returns this round's text and any tool calls. */
