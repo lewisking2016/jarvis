@@ -472,6 +472,13 @@ function garbleScore(text: string): number {
   return total >= 3 ? 2 : fusedDigits >= 2 ? 1 : 0;
 }
 
+/** Raw scramble-signal count — used to fail NO-TOOL attempts (conversational turns
+ *  have nothing to rescue from, so a scrambled reply must simply fail over). */
+function garbleSignals(text: string): number {
+  if (!text) return 0;
+  return (text.match(/[a-z]{3,}\d/gi) ?? []).length + (text.match(/[a-z]{4,}[A-Z][a-z]{3,}/g) ?? []).length;
+}
+
 /** Claims a COMPLETED action or document number with no tool behind it — fabricated
  *  results ("QTE-2026-0003 created…", "Done, sir, invoice issued"). Narrow on purpose:
  *  ordinary answers that merely mention past events must not trip it. */
@@ -499,6 +506,18 @@ function prettyToolLine(name: string, raw: unknown, args: Record<string, unknown
       const who = s("company") || s("contact") || s("name") || "Lead";
       const email = s("email");
       return `Lead saved: ${who}${email ? ` (${email})` : ""}`;
+    }
+    case "update_profile": {
+      // Render the patch's leaf assignments: "payment.till → 999555".
+      const leaves: string[] = [];
+      const walk = (obj: Record<string, unknown>, prefix: string): void => {
+        for (const [k, v] of Object.entries(obj ?? {})) {
+          if (v && typeof v === "object" && !Array.isArray(v)) walk(v as Record<string, unknown>, prefix ? `${prefix}.${k}` : k);
+          else leaves.push(`${prefix ? `${prefix}.` : ""}${k.replace(/_/g, " ")} → ${String(v)}`);
+        }
+      };
+      walk(args.patch as Record<string, unknown> | undefined, "");
+      return `Profile updated${leaves.length ? `: ${leaves.slice(0, 4).join(", ")}` : ""} — on record permanently`;
     }
     case "record_payment": {
       // The result payload doesn't echo the amount — take it from the call args.
@@ -558,12 +577,12 @@ async function runOpenAIPool(
       // garbled, or CLAIMS an action/document that was never executed (doctrine:
       // a promise without a tool call is a failure — treat the brain as broken).
       const claimsAction = FABRICATION_RE.test(text);
-      if (toolEvents === 0 && (text.trim().length === 0 || garbleScore(text) >= 2 || claimsAction)) {
+      if (toolEvents === 0 && (text.trim().length === 0 || garbleSignals(text) >= 2 || garbleScore(text) >= 2 || claimsAction)) {
         tripBreaker(candidateKey(cand));
         opts.onEvent({ type: "reset" }); // wipe the garbled partial text from the console
         const next = chain[i + 1];
         if (!next) throw new Error(`brain produced garbled output: ${text.slice(0, 80) || "(empty)"}`);
-        const why = text.trim().length === 0 ? "empty reply, no tool work" : garbleScore(text) >= 2 ? "garbled narration, no tool work" : "claimed an action it never executed";
+        const why = text.trim().length === 0 ? "empty reply, no tool work" : garbleSignals(text) >= 2 || garbleScore(text) >= 2 ? "garbled narration, no tool work" : "claimed an action it never executed";
         lastErr = new Error(why);
         onFailover(label(cand), label(next), why);
         continue;
