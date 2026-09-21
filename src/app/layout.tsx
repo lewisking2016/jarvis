@@ -110,6 +110,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             toggleMic={voice.toggleMic}
             input={input}
             setInput={setInput}
+            registerComposer={voice.registerComposer}
           />
         </div>
       </body>

@@ -4,21 +4,25 @@ import PDFDocument from "pdfkit";
 import { getDb } from "./db";
 
 /**
- * IMT DOCUMENT TEMPLATES v2 — premium letterhead design for QUOTE / INVOICE / RECEIPT.
- * Design system: one accent color, strong type hierarchy, dark table header,
- * zebra rows, status badges, prominent totals band, boxed payment block,
- * signature lines on quotations, green PAID treatment on receipts.
+ * IMT DOCUMENT TEMPLATES v3 — BANK-GRADE LAYOUT.
+ * Modeled on what Kenyan financial paper actually looks like (Equity statement
+ * blocks, M-Pesa confirmation fields) plus classic invoice anatomy:
+ *   · full-width dark brand band (statement-header aesthetic)
+ *   · document title block with a perforated-meta card (Issue date, Due, Validity)
+ *   · ruled items table, right-aligned tabular numerals, zebra rows
+ *   · official totals block (SUBTOTAL / TAX / TOTAL DUE) like a bank slip
+ *   · PAYMENT SLIP panel: channel-specific fields — Equity bank box AND M-Pesa
+ *     box side by side, account reference = document number (reconciliation)
+ *   · amount-in-words legal line, signature rule for quotations,
+ *     green receipt stamp treatment
  */
 
 const ACCENT = "#0e7490"; // IMT cyan
-const ACCENT_DARK = "#155e75";
-const INK = "#0f172a";
-const DIM = "#64748b";
-const LINE = "#cbd5e1";
-const SOFT = "#f1f5f9";
+const INK = "#111827";
+const DIM = "#6b7280";
+const LINE = "#d1d5db";
+const SOFT = "#f3f4f6";
 const GOOD = "#047857";
-const WARN = "#b45309";
-const BAD = "#b91c1c";
 
 export interface DocRow {
   id: number;
@@ -37,7 +41,7 @@ export interface DocRow {
   linked_doc?: number | null;
 }
 
-/* ---------- amount in words (English, for the legal line) ---------- */
+/* ---------- amount in words ---------- */
 
 const ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
@@ -67,14 +71,12 @@ function amountToWords(amount: number): string {
   return cents > 0 ? `${words} and ${cents}/100` : words;
 }
 
-/* ---------- status badge palette ---------- */
-
 function statusColor(status: string): string {
   const s = status.toLowerCase();
   if (["paid", "issued", "accepted", "won"].includes(s)) return GOOD;
-  if (["draft", "pending"].includes(s)) return WARN;
-  if (["overdue", "void", "rejected"].includes(s)) return BAD;
-  return ACCENT_DARK; // sent, partial, …
+  if (["draft", "pending"].includes(s)) return "#b45309";
+  if (["overdue", "void", "rejected"].includes(s)) return "#b91c1c";
+  return ACCENT;
 }
 
 /* ---------- main renderer ---------- */
@@ -97,134 +99,166 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
       const cur = doc.currency || "KES";
       const fmt = (n: number): string => `${cur} ${n.toLocaleString()}`;
 
-      const W = 612, L = 50, R = 562, CW = R - L; // content box
+      const W = 612, L = 50, R = 562, CW = R - L;
 
-      /* ── left accent spine + top band ── */
-      pdf.rect(0, 0, 6, 792).fill(ACCENT);
-      pdf.rect(0, 0, W, 6).fill(ACCENT);
-
-      /* ── header: logo left (brand carried by the mark, not words), doc identity right ── */
+      /* ══ BANK-GRADE HEADER BAND (full-bleed dark, statement aesthetic) ══ */
+      const bandH = 86;
+      pdf.rect(0, 0, W, bandH).fill(INK);
+      pdf.rect(0, bandH, W, 3).fill(ACCENT); // accent rule under the band
       const logoPath = path.join(process.cwd(), "public", "imtblack.png");
+      // white scrim behind the (black) logo so it reads on the dark band
       if (fs.existsSync(logoPath)) {
-        try { pdf.image(logoPath, L, 26, { height: 42 }); } catch { /* logo optional */ }
+        try {
+          pdf.roundedRect(L, 18, 64, 50, 6).fill("#ffffff");
+          pdf.image(logoPath, L + 10, 24, { height: 38 });
+        } catch { /* logo optional */ }
       }
-      pdf.font("Helvetica").fontSize(8.5).fillColor(DIM)
-        .text("imeantech.com   ·   info@imeantech.com   ·   Waris Mall, Ruiru, Kenya", 102, 42);
+      pdf.font("Helvetica-Bold").fontSize(9).fillColor("#9ca3af")
+        .text("IMT GENERAL SYSTEM", 128, 24)
+        .font("Helvetica").fontSize(8).fillColor("#9ca3af")
+        .text("Waris Mall, Ruiru, Kenya  ·  imeantech.com  ·  info@imeantech.com  ·  0114971070", 128, 38);
 
-      pdf.font("Helvetica-Bold").fontSize(21).fillColor(ACCENT).text(label, 340, 28, { width: 222, align: "right" });
-      pdf.font("Helvetica-Bold").fontSize(11).fillColor(INK).text(doc.number, 340, 52, { width: 222, align: "right" });
+      // document title block, right-aligned like a statement title
+      pdf.font("Helvetica-Bold").fontSize(24).fillColor("#ffffff").text(label, 330, 20, { width: 232, align: "right" });
+      pdf.font("Helvetica-Bold").fontSize(12).fillColor(ACCENT).text(doc.number, 330, 50, { width: 232, align: "right" });
 
-      // status badge pill
+      // status pill sits on the band's bottom edge
       const badgeTxt = doc.status.toUpperCase();
       pdf.font("Helvetica-Bold").fontSize(7.5);
-      const bw = pdf.widthOfString(badgeTxt) + 14;
-      const bx = R - bw, by = 68;
-      pdf.roundedRect(bx, by, bw, 14, 7).fillAndStroke(statusColor(doc.status), statusColor(doc.status));
-      pdf.fillColor("#ffffff").text(badgeTxt, bx + 7, by + 4, { width: bw - 14, align: "center" });
+      const bw = pdf.widthOfString(badgeTxt) + 16;
+      const bx = R - bw, by = bandH - 8;
+      pdf.roundedRect(bx, by, bw, 16, 8).fillAndStroke(statusColor(doc.status), statusColor(doc.status));
+      pdf.fillColor("#ffffff").text(badgeTxt, bx + 8, by + 4.5, { width: bw - 16, align: "center" });
 
-      pdf.moveTo(L, 92).lineTo(R, 92).lineWidth(1).strokeColor(LINE).stroke();
-
-      /* ── parties: client left, meta card right ── */
+      /* ══ PARTY / META: client left, perforated meta card right (bank slip style) ══ */
+      let y = bandH + 26;
       const partyLabel = isInvoice ? "BILLED TO" : isReceipt ? "RECEIVED FROM" : "PREPARED FOR";
-      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(ACCENT_DARK).text(partyLabel, L, 106);
-      pdf.font("Helvetica-Bold").fontSize(12).fillColor(INK).text(doc.client, L, 119);
-      if (doc.client_phone) pdf.font("Helvetica").fontSize(9).fillColor(DIM).text(doc.client_phone, L, 136);
+      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(DIM).text(partyLabel, L, y);
+      pdf.font("Helvetica-Bold").fontSize(13).fillColor(INK).text(doc.client, L, y + 13);
+      if (doc.client_phone) pdf.font("Helvetica").fontSize(9.5).fillColor(DIM).text(doc.client_phone, L, y + 31);
 
-      // meta card
-      const metaRows: [string, string][] = [["Date", doc.created_at.slice(0, 10)]];
+      const metaRows: [string, string][] = [["Issue date", doc.created_at.slice(0, 10)]];
       if (isInvoice && doc.due_date) metaRows.push(["Due date", doc.due_date.slice(0, 10)]);
       if (!isInvoice && !isReceipt) metaRows.push(["Valid for", "30 days"]);
       if (isReceipt && doc.linked_doc) {
         const linked = getDb().prepare("SELECT number FROM documents WHERE id = ?").get(doc.linked_doc) as { number: string } | undefined;
         if (linked) metaRows.push(["Payment for", linked.number]);
       }
-      const mh = 16 + metaRows.length * 15 + 6;
-      const my = 100;
-      pdf.roundedRect(400, my, 162, mh, 4).fill(SOFT);
-      let myy = my + 10;
+      const mh = 14 + metaRows.length * 17 + 8;
+      const my = y - 6;
+      pdf.roundedRect(386, my, 176, mh, 4).fillAndStroke("#ffffff", LINE);
+      // perforation dashes on the card top (bank slip feel)
+      pdf.strokeColor(LINE).lineWidth(0.7).dash(2, { space: 3 }).moveTo(386, my).lineTo(562, my).stroke().undash();
+      let myy = my + 12;
       for (const [k, v] of metaRows) {
-        pdf.font("Helvetica").fontSize(8).fillColor(DIM).text(k, 410, myy);
-        pdf.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text(v, 410, myy, { width: 142, align: "right" });
-        myy += 15;
+        pdf.font("Helvetica").fontSize(8).fillColor(DIM).text(k, 398, myy);
+        pdf.font("Helvetica-Bold").fontSize(9).fillColor(INK).text(v, 398, myy, { width: 152, align: "right" });
+        myy += 17;
       }
 
-      /* ── items table ── */
-      let y = Math.max(160, my + mh + 18);
-      const colQty = 355, colUnit = 425, colAmt = R - 8;
+      /* ══ ITEMS TABLE — statement-style rules ══ */
+      y = Math.max(my + mh + 22, 178);
+      const colQty = 344, colUnit = 420, colAmt = R - 8;
 
-      pdf.rect(L, y, CW, 24).fill(INK);
-      pdf.fillColor("#e2e8f0").font("Helvetica-Bold").fontSize(8);
-      pdf.text("DESCRIPTION", L + 12, y + 8);
-      pdf.text("QTY", colQty, y + 8, { width: 30, align: "right" });
-      pdf.text("UNIT PRICE", colUnit, y + 8, { width: 75, align: "right" });
-      pdf.text("AMOUNT", colAmt, y + 8, { width: 70, align: "right" });
-      y += 24;
+      // table header: NOT filled dark — thin double-rule statement style
+      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(DIM);
+      pdf.text("DESCRIPTION", L + 2, y);
+      pdf.text("QTY", colQty, y, { width: 30, align: "right" });
+      pdf.text("UNIT PRICE (KES)", colUnit, y, { width: 85, align: "right" });
+      pdf.text("AMOUNT (KES)", colAmt, y, { width: 70, align: "right" });
+      y += 12;
+      pdf.moveTo(L, y).lineTo(R, y).lineWidth(1).strokeColor(INK).stroke();
+      y += 3;
+      pdf.moveTo(L, y).lineTo(R, y).lineWidth(0.4).strokeColor(LINE).stroke();
+      y += 7;
 
       pdf.font("Helvetica").fontSize(9.5);
       items.forEach((it, i) => {
         const rowH = 26;
-        if (y + rowH > 690) { pdf.addPage(); y = 60; }
-        if (i % 2 === 1) { pdf.rect(L, y, CW, rowH).fill(SOFT); }
+        if (y + rowH > 660) { pdf.addPage(); y = 60; }
+        if (i % 2 === 1) { pdf.rect(L, y - 3, CW, rowH).fill(SOFT); }
         pdf.fillColor(INK);
         const desc = it.ref ? `${it.description}  (${it.ref})` : it.description;
-        pdf.font("Helvetica").fontSize(9.5).fillColor(INK).text(desc, L + 12, y + 8, { width: colQty - L - 24 });
-        pdf.text(String(it.qty), colQty, y + 8, { width: 30, align: "right" });
-        pdf.text(it.unit_price.toLocaleString(), colUnit, y + 8, { width: 75, align: "right" });
-        pdf.font("Helvetica-Bold").fillColor(ACCENT_DARK).text((it.qty * it.unit_price).toLocaleString(), colAmt, y + 8, { width: 70, align: "right" });
+        pdf.font("Helvetica").fontSize(9.5).fillColor(INK).text(desc, L + 2, y + 4, { width: colQty - L - 16 });
+        pdf.text(String(it.qty), colQty, y + 4, { width: 30, align: "right" });
+        pdf.text(it.unit_price.toLocaleString(), colUnit, y + 4, { width: 85, align: "right" });
+        pdf.font("Helvetica-Bold").fillColor(INK).text((it.qty * it.unit_price).toLocaleString(), colAmt, y + 4, { width: 70, align: "right" });
         y += rowH;
-        pdf.moveTo(L, y).lineTo(R, y).lineWidth(0.5).strokeColor("#e2e8f0").stroke();
+        pdf.moveTo(L, y).lineTo(R, y).lineWidth(0.4).strokeColor("#e5e7eb").stroke();
       });
 
-      /* ── totals card ── */
-      y += 14;
-      const totalsX = 350, totalsW = R - totalsX;
-      pdf.roundedRect(totalsX, y, totalsW, (doc.tax_rate > 0 ? 66 : 50) + 30, 5).fillAndStroke("#ffffff", LINE);
-      pdf.strokeColor(LINE);
-      let ty = y + 11;
-      const tline = (k: string, v: string, opts: { bold?: boolean; big?: boolean; color?: string } = {}): void => {
-        const f = opts.big ? 13 : opts.bold ? 10 : 9;
-        pdf.font(opts.bold || opts.big ? "Helvetica-Bold" : "Helvetica").fontSize(f).fillColor(opts.color ?? (opts.big ? ACCENT : INK));
-        pdf.text(k, totalsX + 14, ty, { width: totalsW - 100, align: "left" });
-        pdf.text(v, totalsX + 14, ty, { width: totalsW - 28, align: "right" });
-        ty += opts.big ? 22 : 15;
+      /* ══ OFFICIAL TOTALS BLOCK — double-ruled like a bank slip ══ */
+      y += 16;
+      const totalsX = 330, totalsW = R - totalsX;
+      let ty = y;
+      const trow = (k: string, v: string, opts: { big?: boolean; rule?: boolean; color?: string } = {}): void => {
+        pdf.font(opts.big ? "Helvetica-Bold" : "Helvetica").fontSize(opts.big ? 13 : 9.5).fillColor(opts.color ?? INK);
+        pdf.text(k, totalsX + 2, ty, { width: totalsW - 100 });
+        pdf.text(v, totalsX + 2, ty, { width: totalsW - 6, align: "right" });
+        ty += opts.big ? 24 : 16;
+        if (opts.rule) {
+          pdf.moveTo(totalsX, ty - 18).lineTo(R, ty - 18).lineWidth(0.6).strokeColor(LINE).stroke();
+        }
       };
-      tline("Subtotal", fmt(subtotal));
-      if (doc.tax_rate > 0) tline(`Tax (${doc.tax_rate}%)`, fmt(tax));
-      pdf.moveTo(totalsX + 12, ty - 3).lineTo(R - 12, ty - 3).lineWidth(0.7).strokeColor(LINE).stroke();
-      ty += 5;
-      tline("TOTAL", fmt(doc.total), { big: true });
-      y = ty + 4;
+      trow("SUBTOTAL", subtotal.toLocaleString());
+      if (doc.tax_rate > 0) trow(`VAT (${doc.tax_rate}%)`, tax.toLocaleString(), { rule: true });
+      ty += 2;
+      // heavy double rule above TOTAL
+      pdf.moveTo(totalsX, ty).lineTo(R, ty).lineWidth(1.4).strokeColor(INK).stroke();
+      ty += 3;
+      pdf.moveTo(totalsX, ty).lineTo(R, ty).lineWidth(0.5).strokeColor(INK).stroke();
+      ty += 8;
+      trow("TOTAL DUE", fmt(doc.total), { big: true, color: ACCENT });
+      if (isReceipt) {
+        ty += 2;
+        trow("AMOUNT PAID", fmt(doc.total), { color: GOOD, rule: false });
+      }
+      y = Math.max(ty + 6, y + 60);
 
-      /* ── amount in words ── */
+      /* ══ LEGAL LINE ══ */
       pdf.font("Helvetica-Oblique").fontSize(8).fillColor(DIM)
         .text(`Amount in words: ${amountToWords(doc.total)} ${cur} only.`, L, y, { width: CW });
-      y += 26;
+      y += 24;
 
-      /* ── kind-specific blocks ── */
+      /* ══ PAYMENT SLIP PANEL — channel boxes side by side ══ */
       if (isInvoice || isReceipt) {
-        // Payment block: full bank details always printed; M-Pesa phone as the
-        // alternative channel; per-doc paybill/till code shown when provided.
-        const ph = 104;
-        pdf.roundedRect(L, y, CW, ph, 5).fillAndStroke(SOFT, LINE);
-        pdf.fillColor(ACCENT_DARK).font("Helvetica-Bold").fontSize(8).text("PAYMENT DETAILS", L + 14, y + 10);
+        const ph = 132;
+        pdf.roundedRect(L, y, CW, ph, 5).fillAndStroke("#ffffff", LINE);
+        pdf.font("Helvetica-Bold").fontSize(8).fillColor(ACCENT).text("PAYMENT SLIP", L + 14, y + 10);
+        pdf.font("Helvetica").fontSize(7.5).fillColor(DIM)
+          .text(isReceipt ? "This receipt confirms funds received against the account reference below." : "Use the account reference below so your payment reconciles automatically.", L + 100, y + 11, { width: CW - 120 });
+
+        const boxY = y + 28, boxH = 78, boxW = (CW - 42) / 2;
+        // ── bank box ──
+        pdf.roundedRect(L + 14, boxY, boxW, boxH, 4).fillAndStroke(SOFT, LINE);
+        pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(ACCENT).text("BANK TRANSFER — EQUITY BANK KENYA", L + 24, boxY + 8);
+        pdf.font("Helvetica").fontSize(8.5).fillColor(INK)
+          .text("Account name:  LEWIS NDUNG'U KINAGA", L + 24, boxY + 23)
+          .text("Account number:  0340184547442", L + 24, boxY + 38)
+          .text("Branch:  Any Equity branch / online", L + 24, boxY + 53);
+        // ── mpesa box ──
+        const mx = L + 14 + boxW + 14;
         const payCode = doc.payment_info ? doc.payment_info.replace(/^(M-PESA · |BANK · )/, "") : "";
-        pdf.font("Helvetica").fontSize(9).fillColor(INK)
-          .text((isReceipt ? "Amount received (KES):  " : "Amount due (KES):  ") + fmt(doc.total), L + 14, y + 26)
-          .text("Bank:  Equity Bank Kenya   —   Account name:  LEWIS NDUNG'U KINAGA", L + 14, y + 41)
-          .text("Account number:  0340184547442", L + 14, y + 56)
-          .text("Account reference:  " + doc.number, L + 14, y + 71)
-          .text("M-Pesa alternative:  0114971070" + (payCode ? `   —   Paybill/Till:  ${payCode}` : ""), L + 14, y + 86)
-          .font("Helvetica").fontSize(7.5).fillColor(DIM)
-          .text("Waris Mall, Ruiru, Kenya   ·   imeantech.com   ·   info@imeantech.com", L + 14, y + 94);
+        pdf.roundedRect(mx, boxY, boxW, boxH, 4).fillAndStroke(SOFT, LINE);
+        pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(ACCENT).text("M-PESA", mx + 10, boxY + 8);
+        pdf.font("Helvetica").fontSize(8.5).fillColor(INK)
+          .text("Pay to:  0114971070 (Buy Goods / Send Money)", mx + 10, boxY + 23)
+          .text(payCode ? `Paybill/Till:  ${payCode}` : "Paybill/Till:  on request", mx + 10, boxY + 38)
+          .text("Confirmation:  M-Pesa SMS code on payment", mx + 10, boxY + 53);
+
+        // account reference strip — full width, the reconciliation line
+        pdf.rect(L + 14, y + ph - 22, CW - 28, 16).fill(INK);
+        pdf.font("Helvetica-Bold").fontSize(8.5).fillColor("#ffffff")
+          .text(`ACCOUNT REFERENCE:  ${doc.number}`, L + 22, y + ph - 18);
         y += ph + 16;
       }
 
       if (!isInvoice && !isReceipt) {
         // quotation: validity + acceptance signatures
         pdf.font("Helvetica").fontSize(8.5).fillColor(DIM)
-          .text("This quotation is valid for 30 days from the date of issue. Prices are inclusive of applicable taxes as shown.", L, y, { width: CW });
+          .text("This quotation is valid for 30 days from the date of issue. Prices are as shown; VAT applied where indicated.", L, y, { width: CW });
         y += 34;
-        const sy = Math.min(y, 660);
+        const sy = Math.min(y, 650);
         pdf.moveTo(L, sy).lineTo(250, sy).lineWidth(0.7).strokeColor(LINE).stroke();
         pdf.moveTo(330, sy).lineTo(R, sy).lineWidth(0.7).strokeColor(LINE).stroke();
         pdf.font("Helvetica").fontSize(7.5).fillColor(DIM)
@@ -236,19 +270,22 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
       }
 
       if (isReceipt) {
-        pdf.roundedRect(L, y, CW, 30, 5).fill(GOOD);
+        // green stamp treatment, slightly rotated feel via double border
+        pdf.roundedRect(L, y, CW, 32, 5).fillAndStroke(GOOD, GOOD);
+        pdf.roundedRect(L + 2, y + 2, CW - 4, 28, 4).stroke("#ffffff");
         pdf.fillColor("#ffffff").font("Helvetica-Bold").fontSize(11)
-          .text("PAYMENT RECEIVED WITH THANKS", L, y + 10, { width: CW, align: "center" });
-        y += 46;
+          .text("PAYMENT RECEIVED WITH THANKS", L, y + 11, { width: CW, align: "center" });
+        y += 48;
       }
 
       /* ── footer ── */
       const footer = (page: number, pages: number): void => {
+        pdf.moveTo(L, 770).lineTo(R, 770).lineWidth(0.4).strokeColor(LINE).stroke();
         pdf.font("Helvetica").fontSize(7.5).fillColor(DIM)
           .text(
             isReceipt
-              ? "This receipt is system-issued and traceable — imeantech.com"
-              : "Thank you for your business — imeantech.com · info@imeantech.com · Waris Mall, Ruiru, Kenya",
+              ? "System-issued receipt · traceable to payment reference · imeantech.com"
+              : "Thank you for your business · imeantech.com · info@imeantech.com · Waris Mall, Ruiru, Kenya",
             L, 776, { width: CW - 60, align: "center" }
           );
         if (pages > 1) pdf.text(`Page ${page} of ${pages}`, R - 60, 776, { width: 60, align: "right" });

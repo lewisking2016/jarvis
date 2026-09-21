@@ -118,7 +118,7 @@ export function useJarvisChat() {
   return { bubbles, busy, send, setBubbles };
 }
 
-export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listening, toggleMic, input, setInput }: {
+export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listening, toggleMic, input, setInput, registerComposer }: {
   open: boolean;
   onClose: () => void;
   chat: ReturnType<typeof useJarvisChat>;
@@ -128,11 +128,25 @@ export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listen
   toggleMic: () => void;
   input: string;
   setInput: (v: string) => void;
+  registerComposer: (fn: (text: string) => void) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<{ id: number; name: string; mime: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  // One-breath composing: the mic handler calls this with the transcript so a
+  // dictation rides the SAME message as any pending attachments.
+  const sendRef = useRef<(text: string) => void>(() => {});
+  sendRef.current = (text: string): void => {
+    const ids = pending.map((p) => p.id);
+    chat.send(text, undefined, ids);
+    setInput("");
+    setPending([]);
+  };
+  // mic dictation → this composer (attachments ride the same message)
+  useEffect(() => {
+    registerComposer((text: string) => sendRef.current(text));
+  }, [registerComposer]);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [chat.bubbles]);
@@ -196,10 +210,7 @@ export function ConsoleDrawer({ open, onClose, chat, voiceOn, setVoiceOn, listen
         style={{ borderColor: "var(--line)" }}
         onSubmit={(e) => {
           e.preventDefault();
-          const ids = pending.map((p) => p.id);
-          chat.send(input, undefined, ids);
-          setInput("");
-          setPending([]);
+          sendRef.current(input);
         }}
       >
         {pending.length > 0 && (
@@ -276,6 +287,12 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
   const speakRef = useRef<(t: string) => void>(() => {});
   const lastSpokenRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  /** Registered by the composer: dictation sends THROUGH it so pending
+   *  attachments ride the same message (one-breath: attach + talk → send). */
+  const composeSendRef = useRef<(text: string) => void>(() => {});
+  const registerComposer = useCallback((fn: (text: string) => void): void => {
+    composeSendRef.current = fn;
+  }, []);
 
   const queueRef = useRef<string[]>([]);
   const pumpingRef = useRef(false);
@@ -418,7 +435,7 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
     r.interimResults = false;
     r.onresult = (e: SpeechResultLike) => {
       setListening(false);
-      void chat.send(e.results[0][0].transcript);
+      composeSendRef.current(e.results[0][0].transcript);
     };
     r.onend = () => setListening(false);
     r.onerror = () => setListening(false);
@@ -427,7 +444,7 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
     setListening(true);
   }, [listening, chat]);
 
-  return { listening, toggleMic, voiceOn, setVoiceOn, speakState };
+  return { listening, toggleMic, voiceOn, setVoiceOn, speakState, registerComposer };
 }
 
 interface SpeechRecognitionLike {
