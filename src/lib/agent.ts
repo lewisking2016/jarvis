@@ -312,7 +312,7 @@ async function streamOpenAIOnce(
   let correctiveUsed = false;
   let completenessUsed = false;
   const executedToolNames: string[] = [];
-  const toolResults: { name: string; summary: string; raw: unknown }[] = [];
+  const toolResults: { name: string; summary: string; raw: unknown; args: Record<string, unknown> }[] = [];
 
   for (let round = 0; round < 8; round++) {
     let roundRes: { roundText: string; toolCalls: { id: string; name: string; args: string }[] };
@@ -358,6 +358,7 @@ async function streamOpenAIOnce(
           name: call.name,
           summary: JSON.stringify(result).replace(/[{}"\\\[\]]/g, "").slice(0, 140),
           raw: result,
+          args: parsedArgs,
         });
         messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result).slice(0, 1500) });
       }
@@ -441,7 +442,7 @@ async function streamOpenAIOnce(
     if (!verbatimClean) {
       const clean =
         "Done, sir.\n" +
-        toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw)}`).join("\n");
+        toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw, t.args)}`).join("\n");
       emit({ type: "reset" });
       emit({ type: "text", delta: clean });
       finalText = clean;
@@ -481,7 +482,7 @@ const FABRICATION_RE =
  * Human one-liner from a REAL tool result. Reads only fields the tool actually
  * returned — never invents. Unknown tools fall back to name + compact summary.
  */
-function prettyToolLine(name: string, raw: unknown): string {
+function prettyToolLine(name: string, raw: unknown, args: Record<string, unknown> = {}): string {
   const r = (raw ?? {}) as Record<string, unknown>;
   const s = (k: string): string => (typeof r[k] === "string" || typeof r[k] === "number" ? String(r[k]) : "");
   switch (name) {
@@ -499,7 +500,9 @@ function prettyToolLine(name: string, raw: unknown): string {
       return `Lead saved: ${who}${email ? ` (${email})` : ""}`;
     }
     case "record_payment": {
-      const amount = typeof r.amount === "number" ? r.amount : null;
+      // The result payload doesn't echo the amount — take it from the call args.
+      const argAmt = typeof args.amount === "number" ? args.amount : null;
+      const amount = typeof r.amount === "number" ? r.amount : argAmt;
       const dup = r.duplicate_suppressed === true;
       const tail = s("receipt")
         ? ` — receipt ${s("receipt")} issued`
