@@ -95,7 +95,9 @@ async function runGemini(opts: RunOpts, builtin: ToolDef[], mcp: McpTool[]): Pro
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set in .env");
   const ai = new GoogleGenAI({ apiKey });
-  const model = process.env.JARVIS_MODEL || "gemini-2.5-flash";
+  // gemini-2.5-flash is 404 for new API users (2026) — the live defaults are the
+  // 3.1 line (probe-verified tool calling: exact math from slang input).
+  const model = process.env.JARVIS_GEMINI_MODEL || "gemini-3.1-flash-lite";
   const systemPrompt = `${buildSystemPrompt()}\n\n${memoryHeader(opts.history.at(-1)?.text)}`;
 
   const all = [...builtin, ...mcp];
@@ -686,11 +688,11 @@ export async function runAgent(opts: RunOpts): Promise<{ text: string; provider:
   if (process.env.GEMINI_API_KEY) {
     try {
       const text = await runGemini(opts, builtin, mcp);
-      return { text, provider: `gemini:${process.env.JARVIS_MODEL || "gemini-2.5-flash"}`, failovers };
+      return { text, provider: `gemini:${process.env.JARVIS_GEMINI_MODEL || "gemini-3.1-flash-lite"}`, failovers };
     } catch (err) {
       if (opts.signal?.aborted) throw err;
       const reason = err instanceof Error ? err.message.slice(0, 120) : String(err);
-      onFailover(`gemini:${process.env.JARVIS_MODEL || "gemini-2.5-flash"}`, "openrouter free pool", reason);
+      onFailover(`gemini:${process.env.JARVIS_GEMINI_MODEL || "gemini-3.1-flash-lite"}`, "openrouter free pool", reason);
     }
   }
 

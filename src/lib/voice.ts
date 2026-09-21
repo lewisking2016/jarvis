@@ -109,31 +109,67 @@ FORMAT RULES (critical):
 SAMPLES:
 ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
 
-  // one brain call through the same pool the agent uses
-  const { chain } = await rankedChain();
+  // one brain call through the same pool the agent uses. Gemini first (follows
+  // format contracts best), then the ranked pool — accept the first CLEAN profile,
+  // keep the least-bad output as fallback.
   let text = "";
   let rawText = "";
-  for (const c of chain) {
-    if (breakerOpen(candidateKey(c))) continue;
-    const baseUrl = c.provider?.baseUrlEnv ? (process.env[c.provider.baseUrlEnv] ?? c.provider.baseUrl) : (c.provider?.baseUrl ?? "https://openrouter.ai/api/v1");
-    const apiKey = c.provider ? (process.env[c.provider.keyEnv] ?? "") : (process.env.OPENROUTER_API_KEY ?? "");
+  const isClean = (t: string): boolean =>
+    t.length > 80 &&
+    !/STYLE PROFILE:?$|FORMAT RULES/i.test(t) &&
+    !/^(we need|the user|i need|let me|looking at|based on|format rules)/i.test(t) &&
+    !/\bsamples?\b/i.test(t);
+  const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
+  if (geminiKey) {
     try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: c.id,
-          messages: [{ role: "user", content: stylePrompt }],
-          temperature: 0.2,
-          max_tokens: 400,
-        }),
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!res.ok) continue;
-      const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const out = j.choices?.[0]?.message?.content?.trim() ?? "";
-      if (out.length > 80) { text = out; rawText = out; break; }
-    } catch { /* next brain */ }
+      const model = (process.env.JARVIS_MODEL ?? "gemini-2.5-flash").replace(/^models\//, "");
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: "Reply with the profile only. First line: STYLE PROFILE:" }] },
+            contents: [{ role: "user", parts: [{ text: stylePrompt }] }],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 500 },
+          }),
+          signal: AbortSignal.timeout(60_000),
+        },
+      );
+      if (res.ok) {
+        const j = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+        const out = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim() ?? "";
+        if (out.length > 80) { text = out; rawText = out; }
+      }
+    } catch { /* pool fallback below */ }
+  }
+  if (!isClean(text)) {
+    const { chain } = await rankedChain();
+    for (const c of chain) {
+      if (breakerOpen(candidateKey(c))) continue;
+      const baseUrl = c.provider?.baseUrlEnv ? (process.env[c.provider.baseUrlEnv] ?? c.provider.baseUrl) : (c.provider?.baseUrl ?? "https://openrouter.ai/api/v1");
+      const apiKey = c.provider ? (process.env[c.provider.keyEnv] ?? "") : (process.env.OPENROUTER_API_KEY ?? "");
+      try {
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: c.id,
+            messages: [{ role: "user", content: stylePrompt }],
+            temperature: 0.2,
+            max_tokens: 400,
+          }),
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (!res.ok) continue;
+        const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+        const out = j.choices?.[0]?.message?.content?.trim() ?? "";
+        if (out.length > 80) {
+          if (!rawText) rawText = out;
+          if (isClean(out)) { text = out; break; }
+        }
+      } catch { /* next brain */ }
+    }
   }
   if (!text) return null;
   // Reasoning models leak meta-analysis ("The user wants… I need to analyze…").
