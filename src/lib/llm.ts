@@ -19,11 +19,12 @@ export const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
  *  NB: some catalog-listed free models reject plain API calls ("agentic harnesses only") —
  *  they are handled by the breaker + classifier, never by trusting the catalog blindly. */
 export const FREE_MODEL_CHAIN = [
-  "moonshotai/Kimi-K3:free", // 2026-09-21 bake-off: 100/100 — tools+math+narration clean
-  "dots-studio/dots-3-note-preview:free", // 524,288 ctx — bake-off 40/100 (math flaky) but alive
+  // OpenRouter-sourced tail only: the 2026-09-21 key hit its monthly cap (402), and
+  // several former heads (nemotron lightning/ultra, Kimi-K3:free) are retired 404s.
+  // These four answered in the last bake-off; catalog refresh re-ranks on reset.
+  "dots-studio/dots-3-note-preview:free", // 524,288 ctx — alive (math flaky, 40/100)
   "inclusionai/ling-3.0-flash-vl:free", // 262,144 ctx — vision fallback when images attached
-  "nex-agi/nex-n2.5-mini:free", // 262,144 ctx
-  "qwen/qwen3.8-27b:free", // 262,144 ctx — HF twin won the bake-off
+  "qwen/qwen3.8-27b:free", // 262,144 ctx
   "poolside/laguna-s-2.1:free", // 262,144 ctx
 ] as const;
 
@@ -48,34 +49,29 @@ export interface ProviderDef {
 
 /** Additional OpenAI-compatible free providers — any key present in .env joins the pool. */
 export const EXTRA_PROVIDERS: ProviderDef[] = [
-  // ORDER MATTERS: bake-off winners walk first; everything else is backup.
-  {
-    // HuggingFace Inference Providers router — 2026-09-21 bake-off: THREE models
-    // scored 100/100 (messy directive → correct tool call + math → clean narration).
-    // Qwen3.8-27B: 0.45s first byte; Kimi-K3: 3.3s; DeepSeek-V4.1-Flash: 0.8s.
-    id: "huggingface",
-    baseUrl: "https://router.huggingface.co/v1",
-    keyEnv: "HUGGINGFACE_API_KEY",
-    models: ["Qwen/Qwen3.8-27B", "moonshotai/Kimi-K3", "deepseek-ai/DeepSeek-V4.1-Flash"],
-  },
+  // ORDER MATTERS: 2026-09-21 live probes — freellmapi:auto answered 200 in 1.8s
+  // (VPS-local, no external dependency); HF router is fastest when its monthly
+  // credits are available; OmniRoute combos (11s) and NVIDIA are backups.
   {
     // FreeLLMAPI (deploy/freellm-deploy.mjs): 295 free models across 21 platforms
     // behind one OpenAI-compatible /v1, with per-model rate-limit tracking and
     // automatic failover. "auto" = their balanced router across all keyed platforms.
+    // 2026-09-21 bake-off: 100/100 (tools+math+clean narration), first byte 1.4s.
     id: "freellmapi",
     baseUrl: "http://localhost:3001/v1",
     baseUrlEnv: "FREELLMAPI_BASE_URL",
     keyEnv: "FREELLMAPI_API_KEY",
-    // "auto" scored 100/100 in the bake-off (1.4s first byte) — first VPS-local backup.
     models: ["auto", "moonshotai/Kimi-K3"],
   },
   {
-    id: "nvidia",
-    baseUrl: "https://integrate.api.nvidia.com/v1",
-    keyEnv: "NVIDIA_API_KEY",
-    // 2026-09-21 bake-off: super-120b answered fast but skipped the tool call (narrator
-    // tendency) — backup only. OpenRouter :free twins are 404 (retired) — never listed here.
-    models: ["nvidia/nemotron-3-super-120b-a12b"],
+    // HuggingFace Inference Providers router — bake-off 100/100 × 3 models
+    // (Qwen3.8-27B 0.45s, Kimi-K3 3.3s, DeepSeek-V4.1-Flash 0.8s). NB: monthly
+    // included credits are limited — after depletion (402) the walk moves on and
+    // this provider auto-recovers when the monthly allowance resets.
+    id: "huggingface",
+    baseUrl: "https://router.huggingface.co/v1",
+    keyEnv: "HUGGINGFACE_API_KEY",
+    models: ["Qwen/Qwen3.8-27B", "moonshotai/Kimi-K3", "deepseek-ai/DeepSeek-V4.1-Flash"],
   },
   {
     id: "omniroute",
@@ -85,6 +81,14 @@ export const EXTRA_PROVIDERS: ProviderDef[] = [
     // The JARVIS combos (priority failover walks inside OmniRoute) + the federation
     // auto-router as tail. Combo order is managed by deploy/push-omr-state.mjs.
     models: ["jarvis-pro", "jarvis-free", "jarvis-fast", "jarvis-coder", "auto/best-chat"],
+  },
+  {
+    id: "nvidia",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    keyEnv: "NVIDIA_API_KEY",
+    // 2026-09-21 bake-off: super-120b answers fast but skips tool calls under a
+    // tools directive (narrator tendency) — conversational backup only.
+    models: ["nvidia/nemotron-3-super-120b-a12b"],
   },
   { id: "groq", baseUrl: "https://api.groq.com/openai/v1", keyEnv: "GROQ_API_KEY", models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b", "moonshotai/kimi-k2-instruct"] },
   { id: "cerebras", baseUrl: "https://api.cerebras.ai/v1", keyEnv: "CEREBRAS_API_KEY", models: ["llama-3.3-70b", "qwen-3-32b", "gpt-oss-120b"] },
@@ -269,6 +273,9 @@ export async function rankedChain(opts: { preferVision?: boolean } = {}): Promis
 export function breakerCooldownFor(status: number, body: string): number {
   const b = body.toLowerCase();
   if (b.includes("agentic harness")) return 24 * 60 * 60e3; // harness-only policy — effectively permanent
+  if (status === 401 || status === 402 || b.includes("depleted") || b.includes("monthly included credits")) {
+    return 60 * 60e3; // key exhausted/out of credit — every model behind it is dead; recheck hourly
+  }
   if (status === 404 || b.includes("unavailable for free") || b.includes("not a valid model") || b.includes("no endpoints")) {
     return 24 * 60 * 60e3; // model retired/renamed — effectively permanent
   }
@@ -279,13 +286,17 @@ export function breakerCooldownFor(status: number, body: string): number {
 }
 
 export function shouldFailover(status: number, body: string): boolean {
-  if (status === 403 || status === 404) return true; // this model is blocked/gone — the next one likely isn't
+  // NB: 401/402 walk too — each candidate is a DIFFERENT provider/key, so a dead key
+  // upstream must not strand the turn; the hourly breaker keeps the walk cheap.
+  if ([401, 402, 403, 404].includes(status)) return true;
   if ([408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524].includes(status)) return true;
   const b = body.toLowerCase();
   const patterns = [
     "rate limit",
     "quota",
     "insufficient", // provider credit errors on routed free models
+    "depleted", // monthly included credits exhausted
+    "purchase pre-paid",
     "temporarily",
     "overloaded",
     "capacity",
