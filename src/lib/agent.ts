@@ -420,27 +420,32 @@ async function streamOpenAIOnce(
     throw new Error("model emitted tool calls as text — no streaming tool support");
   }
 
-  // NARRATION RESCUE — when tools executed and the model ATTEMPTS to report the
-  // outcome (claims completion, JSON-echoes results, or produces garble/scramble),
-  // replace its prose with a clean confirmation synthesized from the REAL tool
-  // results. Free models scramble tokens unpredictably; pattern-chasing lost the
-  // arms race, so the rule is structural: completion claims + tool work = the
-  // results themselves are the truth, and they narrate perfectly every time.
-  // (Pure answers with no tool work, and turns where the model narrates BEFORE
-  // calling tools, are untouched.)
-  const jsonEcho = /:\s*ok:(true|false)|\{"\s*ok|number:\s*[A-Z]{3}-/.test(finalText);
-  const attemptedReport =
-    /\bI\s+(?:created|recorded|issued|saved|sent|scheduled)\b/i.test(finalText) ||
-    /^\s*(?:done|created|recorded|issued|saved)\b[,:—-]/i.test(finalText) ||
-    jsonEcho ||
-    garbleScore(finalText) >= 1;
-  if (executedToolNames.length > 0 && attemptedReport) {
-    const clean =
-      "Done, sir.\n" +
-      toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw)}`).join("\n");
-    emit({ type: "reset" });
-    emit({ type: "text", delta: clean });
-    finalText = clean;
+  // NARRATION RESCUE (structural, not pattern-based) — for ACTION tools (documents,
+  // payments, leads, outreach) the confirmation must quote a REAL result identifier
+  // (document number, amount, receipt) with zero garble. Free models scramble tokens
+  // in endlessly novel ways ("Recorded for Ac KES 9 (ref432)"), so prose-pattern
+  // detection lost the arms race; the tool results themselves are the truth and they
+  // narrate perfectly every time. Pure answers and non-action turns are untouched.
+  const ACTION_TOOL_SET = new Set(["create_document", "add_lead", "record_payment", "create_expense", "schedule_outreach", "send_email", "create_approval", "score_lead"]);
+  const actionResults = toolResults.filter((t) => ACTION_TOOL_SET.has(t.name));
+  if (actionResults.length > 0) {
+    const ids: string[] = [];
+    for (const t of actionResults) {
+      const r = (t.raw ?? {}) as Record<string, unknown>;
+      for (const k of ["number", "receipt_number", "reconciled"]) if (typeof r[k] === "string" && r[k]) ids.push(r[k]);
+      const money = typeof r.total === "number" ? r.total : typeof r.amount === "number" ? r.amount : null;
+      if (money !== null) ids.push(String(money), money.toLocaleString("en-US"));
+    }
+    const jsonEcho = /:\s*ok:(true|false)|\{"\s*ok|number:\s*[A-Z]{3}-/.test(finalText);
+    const verbatimClean = garbleScore(finalText) === 0 && !jsonEcho && ids.some((d) => finalText.includes(d));
+    if (!verbatimClean) {
+      const clean =
+        "Done, sir.\n" +
+        toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw)}`).join("\n");
+      emit({ type: "reset" });
+      emit({ type: "text", delta: clean });
+      finalText = clean;
+    }
   }
   return finalText;
 }
