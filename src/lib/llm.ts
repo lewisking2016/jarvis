@@ -73,7 +73,9 @@ export const EXTRA_PROVIDERS: ProviderDef[] = [
     baseUrl: "http://localhost:3001/v1",
     baseUrlEnv: "FREELLMAPI_BASE_URL",
     keyEnv: "FREELLMAPI_API_KEY",
-    models: ["auto", "moonshotai/Kimi-K3"],
+    // "auto" = their balanced router (DeepSeek-R1 via HuggingFace today): clean
+    // narration, reliable tools — preferred backup over the NVIDIA 550B narrator.
+    models: ["auto", "moonshotai/Kimi-K3", "openrouter/gpt-oss-120b"],
   },
   {
     id: "omniroute",

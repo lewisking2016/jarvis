@@ -427,7 +427,7 @@ async function streamOpenAIOnce(
   // in endlessly novel ways ("Recorded for Ac KES 9 (ref432)"), so prose-pattern
   // detection lost the arms race; the tool results themselves are the truth and they
   // narrate perfectly every time. Pure answers and non-action turns are untouched.
-  const ACTION_TOOL_SET = new Set(["create_document", "add_lead", "record_payment", "create_expense", "schedule_outreach", "send_email", "create_approval", "score_lead"]);
+  const ACTION_TOOL_SET = new Set(["create_document", "add_lead", "record_payment", "create_expense", "schedule_outreach", "send_email", "create_approval", "score_lead", "update_profile"]);
   const actionResults = toolResults.filter((t) => ACTION_TOOL_SET.has(t.name));
   if (actionResults.length > 0) {
     const ids: string[] = [];
