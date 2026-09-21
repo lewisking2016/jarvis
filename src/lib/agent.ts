@@ -513,9 +513,13 @@ function prettyToolLine(name: string, raw: unknown, args: Record<string, unknown
       return `${kind} ${num} created for ${client || "the client"} — KES ${Number(total).toLocaleString("en-US")}${due ? `, due ${due}` : ""}`;
     }
     case "add_lead": {
-      const who = s("company") || s("contact") || s("name") || "Lead";
-      const email = s("email");
-      return `Lead saved: ${who}${email ? ` (${email})` : ""}`;
+      const who = s("company") || s("contact") || s("name")
+        || (typeof args.company === "string" ? args.company : "")
+        || (typeof args.contact === "string" ? args.contact : "")
+        || "Lead";
+      const email = s("email") || (typeof args.email === "string" ? args.email : "");
+      const phone = s("phone") || (typeof args.phone === "string" ? args.phone : "");
+      return `Lead saved: ${who}${phone ? ` — ${phone}` : ""}${email ? ` (${email})` : ""}`;
     }
     case "update_profile": {
       // Render the patch's leaf assignments: "payment.till → 999555".
