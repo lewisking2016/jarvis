@@ -646,6 +646,8 @@ export function ensureScheduler(): void {
   schedulerStarted = true;
   // Nightly self-check at 03:00 (brains, MCP servers, SMTP mailboxes)
   import("./selfcheck").then((m) => m.ensureSelfCheckScheduler()).catch(() => {});
+  // Morning-voice brief at 08:00 Nairobi (WhatsApp text + voice note + email)
+  import("./brief").then((m) => m.ensureMorningBriefScheduler()).catch(() => {});
   setInterval(() => {
     try {
       const { sent, gated } = processDue(25);

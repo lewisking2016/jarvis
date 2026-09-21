@@ -68,5 +68,7 @@ RULES
 
 /** Composed per request: doctrine + live company profile (+ memory header appended by callers). */
 export function buildSystemPrompt(): string {
-  return `${JARVIS_SYSTEM_PROMPT}\n\n${profileHeader()}`;
+  // Lazy imports avoid cycles: voice.ts → llm.ts → system.ts.
+  const { voiceHeader } = require("./voice") as typeof import("./voice");
+  return `${JARVIS_SYSTEM_PROMPT}\n\n${profileHeader()}${voiceHeader()}`;
 }
