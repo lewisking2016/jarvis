@@ -420,20 +420,21 @@ async function streamOpenAIOnce(
     throw new Error("model emitted tool calls as text — no streaming tool support");
   }
 
-  // NARRATION RESCUE — tools executed but the model's prose is garbled, a raw JSON
-  // echo, or references document numbers that don't match what was actually created.
-  // Replace it with a clean confirmation synthesized from the REAL tool results
-  // (every field comes from what actually ran — nothing is invented), and reset the
-  // console bubble so the streamed garble is wiped before the clean line appears.
-  const realNumbers = toolResults
-    .map((t) => (t.raw as { number?: unknown })?.number)
-    .filter((n): n is string => typeof n === "string");
-  const mentionsReal = realNumbers.some((n) => finalText.includes(n));
+  // NARRATION RESCUE — when tools executed and the model ATTEMPTS to report the
+  // outcome (claims completion, JSON-echoes results, or produces garble/scramble),
+  // replace its prose with a clean confirmation synthesized from the REAL tool
+  // results. Free models scramble tokens unpredictably; pattern-chasing lost the
+  // arms race, so the rule is structural: completion claims + tool work = the
+  // results themselves are the truth, and they narrate perfectly every time.
+  // (Pure answers with no tool work, and turns where the model narrates BEFORE
+  // calling tools, are untouched.)
   const jsonEcho = /:\s*ok:(true|false)|\{"\s*ok|number:\s*[A-Z]{3}-/.test(finalText);
-  const claimsDone = /\bI\s+(?:created|recorded|issued|saved|sent|scheduled)\b|^\s*(?:done|created|recorded|issued|saved)\b[,:—-]/i.test(finalText);
-  const cleanEnough =
-    garbleScore(finalText) === 0 && !jsonEcho && !(claimsDone && !mentionsReal);
-  if (executedToolNames.length > 0 && !cleanEnough) {
+  const attemptedReport =
+    /\bI\s+(?:created|recorded|issued|saved|sent|scheduled)\b/i.test(finalText) ||
+    /^\s*(?:done|created|recorded|issued|saved)\b[,:—-]/i.test(finalText) ||
+    jsonEcho ||
+    garbleScore(finalText) >= 1;
+  if (executedToolNames.length > 0 && attemptedReport) {
     const clean =
       "Done, sir.\n" +
       toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw)}`).join("\n");

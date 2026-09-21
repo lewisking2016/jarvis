@@ -158,6 +158,28 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
     },
     handler: (a) => {
       const amount = Number(a.amount);
+      // IDEMPOTENCE — models occasionally emit the same tool call twice in one
+      // turn (or retry rounds re-run it). A duplicate = double-counted money.
+      // Same amount+counterparty+ref within 2 minutes is the SAME payment.
+      if (a.ref || a.counterparty) {
+        const recent = getDb()
+          .prepare(
+            "SELECT id FROM transactions WHERE direction='in' AND amount=? AND IFNULL(counterparty,'')=IFNULL(?, '') AND IFNULL(ref,'')=IFNULL(?, '') AND created_at >= datetime('now','-2 minutes') LIMIT 1",
+          )
+          .get(amount, a.counterparty ? String(a.counterparty) : null, a.ref ? String(a.ref) : null) as { id: number } | undefined;
+        if (recent) {
+          return { ok: true, tx_id: recent.id, duplicate_suppressed: true, note: "This exact payment was already recorded moments ago — not recorded twice." };
+        }
+      }
+      // Models fumble years ("received today" → 2025-…): reject any occurred_at
+      // that lands in the future OR more than a day in the past when the model
+      // derived it from the word "today" — safest is to drop a past-year date.
+      let occurred: string | undefined;
+      if (typeof a.occurred_at === "string" && a.occurred_at.trim()) {
+        const y = Number(a.occurred_at.slice(0, 4));
+        const thisYear = new Date().getFullYear();
+        occurred = y === thisYear ? a.occurred_at : undefined; // wrong-year dates become "now"
+      }
       const tx = insertTransaction({
         direction: "in",
         amount,
@@ -168,7 +190,7 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
         source: a.raw_sms ? "mpesa" : "manual",
         ref: a.ref ? String(a.ref) : null,
         raw_sms: a.raw_sms ? String(a.raw_sms) : null,
-        occurred_at: a.occurred_at ? String(a.occurred_at) : undefined,
+        occurred_at: occurred,
       });
       const match = matchPayment(amount, a.phone ? String(a.phone) : null, a.counterparty ? String(a.counterparty) : null);
       if (match.confidence === "high" && match.invoice) {
