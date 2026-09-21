@@ -420,12 +420,20 @@ async function streamOpenAIOnce(
     throw new Error("model emitted tool calls as text — no streaming tool support");
   }
 
-  // NARRATION RESCUE — tools executed but the model's prose is garbled or a raw JSON
-  // echo. Replace it with a clean confirmation synthesized from the REAL tool results
+  // NARRATION RESCUE — tools executed but the model's prose is garbled, a raw JSON
+  // echo, or references document numbers that don't match what was actually created.
+  // Replace it with a clean confirmation synthesized from the REAL tool results
   // (every field comes from what actually ran — nothing is invented), and reset the
   // console bubble so the streamed garble is wiped before the clean line appears.
+  const realNumbers = toolResults
+    .map((t) => (t.raw as { number?: unknown })?.number)
+    .filter((n): n is string => typeof n === "string");
+  const mentionsReal = realNumbers.some((n) => finalText.includes(n));
   const jsonEcho = /:\s*ok:(true|false)|\{"\s*ok|number:\s*[A-Z]{3}-/.test(finalText);
-  if (executedToolNames.length > 0 && (garbleScore(finalText) >= 2 || jsonEcho)) {
+  const claimsDone = /\bI\s+(?:created|recorded|issued|saved|sent|scheduled)\b|^\s*(?:done|created|recorded|issued|saved)\b[,:—-]/i.test(finalText);
+  const cleanEnough =
+    garbleScore(finalText) === 0 && !jsonEcho && !(claimsDone && !mentionsReal);
+  if (executedToolNames.length > 0 && !cleanEnough) {
     const clean =
       "Done, sir.\n" +
       toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw)}`).join("\n");

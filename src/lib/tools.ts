@@ -114,9 +114,15 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
       const total = round2(subtotal * (1 + taxRate / 100));
       const kind = a.kind === "INVOICE" ? "INVOICE" : "QUOTE";
       const number = nextDocNumber(kind);
+      // Models fumble the year ("end of month" → 2025-…) — clamp anything not in the
+      // future to the default +14 days rather than issue a document due in the past.
+      const today = new Date();
+      const fallbackDue = new Date(today.getTime() + 14 * 86_400_000).toISOString().slice(0, 10);
+      let due = typeof a.due_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(a.due_date) ? a.due_date : fallbackDue;
+      if (new Date(`${due}T23:59:59`) <= today) due = fallbackDue;
       getDb()
         .prepare("INSERT INTO documents (kind, number, client, client_phone, items_json, currency, tax_rate, total, status, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-        .run(kind, number, String(a.client), a.client_phone ? String(a.client_phone) : null, JSON.stringify(items), a.currency ? String(a.currency) : "KES", taxRate, total, kind === "INVOICE" ? "sent" : "draft", a.due_date ? String(a.due_date) : null);
+        .run(kind, number, String(a.client), a.client_phone ? String(a.client_phone) : null, JSON.stringify(items), a.currency ? String(a.currency) : "KES", taxRate, total, kind === "INVOICE" ? "sent" : "draft", due);
       logActivity("DOC_CREATED", `${number} ${a.client} — ${total}`);
       return { ok: true, number, subtotal: round2(subtotal), tax: round2((subtotal * taxRate) / 100), total };
     },
