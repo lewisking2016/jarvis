@@ -303,7 +303,9 @@ async function streamOpenAIOnce(
           /* skip malformed chunk */
         }
       }
-      chunk = await reader.read();
+      // NB: no extra read here — the for(;;) loop head reads next. A second read
+      // in the body discarded every OTHER SSE chunk (missing mid-word fragments,
+      // shuffled joins) and made healthy models look scrambled.
     }
     return { roundText, toolCalls };
   };
