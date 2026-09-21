@@ -498,8 +498,20 @@ function prettyToolLine(name: string, raw: unknown): string {
       const email = s("email");
       return `Lead saved: ${who}${email ? ` (${email})` : ""}`;
     }
-    case "record_payment":
-      return `Payment recorded: KES ${s("amount") || "?"}${s("receipt_number") ? ` — receipt ${s("receipt_number")}` : ""}`;
+    case "record_payment": {
+      const amount = typeof r.amount === "number" ? r.amount : null;
+      const dup = r.duplicate_suppressed === true;
+      const tail = s("receipt")
+        ? ` — receipt ${s("receipt")} issued`
+        : s("reconciled")
+          ? ` — reconciled to ${s("reconciled")}`
+          : s("needs_confirmation")
+            ? ` — awaiting your approval to reconcile with ${s("needs_confirmation")}`
+            : r.unmatched_task
+              ? " — unmatched; an identify-payment task is open"
+              : "";
+      return `Payment ${dup ? "already recorded — not duplicated" : "recorded"}${amount !== null ? `: KES ${amount.toLocaleString("en-US")}` : ""}${tail}`;
+    }
     default: {
       const summary = JSON.stringify(raw ?? {}).replace(/[{}"\\\[\]]/g, "").slice(0, 120);
       return `${name}: ${summary || "done"}`;
