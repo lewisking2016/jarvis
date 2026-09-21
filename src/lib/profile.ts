@@ -15,7 +15,7 @@ export interface CompanyProfile {
   tagline: string;
   services: { name: string; unit_price: number; unit: string }[];
   standard_terms: string;
-  payment: { paybill: string; till: string; bank: string; terms: string };
+  payment: { paybill: string; till: string; bank: string; mpesa_phone: string; terms: string };
   contacts: { email_formal: string; email_marketing: string; phone: string; website: string; location: string };
   principal: { name: string; title: string; style_notes: string };
   targets: { revenue_quarter_kes: number };
@@ -38,15 +38,16 @@ export const DEFAULT_PROFILE: CompanyProfile = {
   payment: {
     paybill: "",
     till: "",
-    bank: "",
+    bank: "Equity Bank Kenya — account name LEWIS NDUNG'U KINAGA, account number 0340184547442, bank transfer",
+    mpesa_phone: "0114971070",
     terms: "50% deposit to commence, balance on delivery (default unless the principal says otherwise).",
   },
   contacts: {
     email_formal: "admin@imeantech.com",
     email_marketing: "info@imeantech.com",
-    phone: "",
+    phone: "0114971070",
     website: "imeantech.com",
-    location: "Nairobi, Kenya",
+    location: "Waris Mall, Ruiru, Kenya",
   },
   principal: {
     name: "Lewis",
@@ -106,7 +107,11 @@ export function profileHeader(): string {
   lines.push(`Standard price list: ${p.services.map((s) => `${s.name} KES ${s.unit_price.toLocaleString("en-US")} ${s.unit}`).join("; ")}`);
   lines.push(`Terms: ${p.standard_terms}`);
   lines.push(
-    `Payment: ${[p.payment.paybill && `M-Pesa paybill ${p.payment.paybill}`, p.payment.till && `till ${p.payment.till}`, p.payment.bank && `bank: ${p.payment.bank}`].filter(Boolean).join(", ") || "details not set — leave payment codes blank and say so if a document needs one"}. ${p.payment.terms}`,
+    `Payment: ${[
+      p.payment.bank && `bank ${p.payment.bank}`,
+      (p.payment.paybill || p.payment.till) && `M-Pesa ${[p.payment.paybill && `paybill ${p.payment.paybill}`, p.payment.till && `till ${p.payment.till}`].filter(Boolean).join(" / ")}`,
+      p.payment.mpesa_phone && `M-Pesa alternative phone ${p.payment.mpesa_phone}`,
+    ].filter(Boolean).join(" · ") || "details not set"}. ${p.payment.terms}`,
   );
   lines.push(`Contacts: formal ${p.contacts.email_formal} · marketing ${p.contacts.email_marketing} · web ${p.contacts.website} · ${p.contacts.location}${p.contacts.phone ? ` · phone ${p.contacts.phone}` : ""}`);
   lines.push(`Principal: ${p.principal.name} (${p.principal.title}). ${p.principal.style_notes}`);

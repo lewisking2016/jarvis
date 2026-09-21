@@ -82,7 +82,7 @@ function statusColor(status: string): string {
 export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
-      const pdf = new PDFDocument({ size: "A4", margin: 50, info: { Author: "IMT General System", Title: doc.number } });
+      const pdf = new PDFDocument({ size: "A4", margin: 50, info: { Author: "imeantech.com", Title: doc.number } });
       const chunks: Buffer[] = [];
       pdf.on("data", (c: Buffer) => chunks.push(c));
       pdf.on("end", () => resolve(Buffer.concat(chunks)));
@@ -103,14 +103,13 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
       pdf.rect(0, 0, 6, 792).fill(ACCENT);
       pdf.rect(0, 0, W, 6).fill(ACCENT);
 
-      /* ── header: brand block left, doc identity right ── */
+      /* ── header: logo left (brand carried by the mark, not words), doc identity right ── */
       const logoPath = path.join(process.cwd(), "public", "imtblack.png");
       if (fs.existsSync(logoPath)) {
         try { pdf.image(logoPath, L, 26, { height: 42 }); } catch { /* logo optional */ }
       }
-      pdf.fillColor(INK).font("Helvetica-Bold").fontSize(19).text("IMT GENERAL SYSTEM", 102, 30);
       pdf.font("Helvetica").fontSize(8.5).fillColor(DIM)
-        .text("imeantech.com   ·   info@imeantech.com   ·   Nairobi, Kenya", 102, 53);
+        .text("imeantech.com   ·   info@imeantech.com   ·   Waris Mall, Ruiru, Kenya", 102, 42);
 
       pdf.font("Helvetica-Bold").fontSize(21).fillColor(ACCENT).text(label, 340, 28, { width: 222, align: "right" });
       pdf.font("Helvetica-Bold").fontSize(11).fillColor(INK).text(doc.number, 340, 52, { width: 222, align: "right" });
@@ -203,26 +202,20 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
 
       /* ── kind-specific blocks ── */
       if (isInvoice || isReceipt) {
-        const ph = 86;
+        // Payment block: full bank details always printed; M-Pesa phone as the
+        // alternative channel; per-doc paybill/till code shown when provided.
+        const ph = 104;
         pdf.roundedRect(L, y, CW, ph, 5).fillAndStroke(SOFT, LINE);
         pdf.fillColor(ACCENT_DARK).font("Helvetica-Bold").fontSize(8).text("PAYMENT DETAILS", L + 14, y + 10);
-        const isBank = (doc.payment_info ?? "").startsWith("BANK · ");
         const payCode = doc.payment_info ? doc.payment_info.replace(/^(M-PESA · |BANK · )/, "") : "";
         pdf.font("Helvetica").fontSize(9).fillColor(INK)
-          .text((isReceipt ? "Amount received (KES):  " : "Amount due (KES):  ") + fmt(doc.total), L + 14, y + 27)
-          .text(
-            isBank
-              ? "Channel:  BANK TRANSFER — Code/Reference:  " + (payCode || "to be advised")
-              : "Channel:  M-PESA — Paybill/Till:  " + (payCode || "to be advised"),
-            L + 14, y + 42,
-          )
-          .text("Account reference:  " + doc.number, L + 14, y + 57)
-          .text(
-            isBank
-              ? "Alternative:  M-PESA accepted — Paybill/Till on request (info@imeantech.com)"
-              : "Alternative:  Bank transfer — IMT GENERAL SYSTEM (info@imeantech.com)",
-            L + 14, y + 72,
-          );
+          .text((isReceipt ? "Amount received (KES):  " : "Amount due (KES):  ") + fmt(doc.total), L + 14, y + 26)
+          .text("Bank:  Equity Bank Kenya   —   Account name:  LEWIS NDUNG'U KINAGA", L + 14, y + 41)
+          .text("Account number:  0340184547442", L + 14, y + 56)
+          .text("Account reference:  " + doc.number, L + 14, y + 71)
+          .text("M-Pesa alternative:  0114971070" + (payCode ? `   —   Paybill/Till:  ${payCode}` : ""), L + 14, y + 86)
+          .font("Helvetica").fontSize(7.5).fillColor(DIM)
+          .text("Waris Mall, Ruiru, Kenya   ·   imeantech.com   ·   info@imeantech.com", L + 14, y + 94);
         y += ph + 16;
       }
 
@@ -237,7 +230,7 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
         pdf.font("Helvetica").fontSize(7.5).fillColor(DIM)
           .text("CLIENT ACCEPTANCE — SIGNATURE", L, sy + 5)
           .text("DATE", 330, sy + 5)
-          .text("For IMT General System", L, sy + 16)
+          .text("AUTHORISED", L, sy + 16)
           .text("DATE", 330, sy + 16);
         y = sy + 40;
       }
@@ -254,8 +247,8 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
         pdf.font("Helvetica").fontSize(7.5).fillColor(DIM)
           .text(
             isReceipt
-              ? "This receipt is system-issued and traceable — IMT General System command core · imeantech.com"
-              : "Thank you for your business — IMT General System · imeantech.com · info@imeantech.com",
+              ? "This receipt is system-issued and traceable — imeantech.com"
+              : "Thank you for your business — imeantech.com · info@imeantech.com · Waris Mall, Ruiru, Kenya",
             L, 776, { width: CW - 60, align: "center" }
           );
         if (pages > 1) pdf.text(`Page ${page} of ${pages}`, R - 60, 776, { width: 60, align: "right" });
