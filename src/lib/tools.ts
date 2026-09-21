@@ -114,6 +114,17 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
       const taxRate = typeof a.tax_rate === "number" ? a.tax_rate : 0;
       const total = round2(subtotal * (1 + taxRate / 100));
       const kind = a.kind === "INVOICE" ? "INVOICE" : "QUOTE";
+      // IDEMPOTENCE — models occasionally emit the same tool call twice in one turn
+      // (gauntlet 2026-09-21: INV-…0003 AND INV-…0004 both created). A duplicate
+      // document = double billing. Same kind+client+total within 2 min = same doc.
+      const dup = getDb()
+        .prepare(
+          "SELECT number FROM documents WHERE kind=? AND client=? AND total=? AND created_at >= datetime('now','-2 minutes') LIMIT 1",
+        )
+        .get(kind, String(a.client), total) as { number: string } | undefined;
+      if (dup) {
+        return { ok: true, number: dup.number, kind, client: String(a.client), total, duplicate_suppressed: true, note: "This exact document was already created moments ago — not created twice." };
+      }
       const number = nextDocNumber(kind);
       // Models fumble the year ("end of month" → 2025-…) — clamp anything not in the
       // future to the default +14 days rather than issue a document due in the past.
