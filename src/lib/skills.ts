@@ -61,7 +61,8 @@ async function exaSearch(query: string, limit = 6): Promise<{ results: { title: 
   const run = promisify(execFile);
   const { stdout } = await run(
     "mcporter",
-    ["call", "exa.web_search_exa(query: " + JSON.stringify(query) + ", numResults: " + Math.min(limit, 8) + ")"],
+    // mcporter ≥0.9: named tool + --args JSON (positional call strings are rejected)
+    ["call", "exa.web_search_exa", "--args", JSON.stringify({ query, numResults: Math.min(limit, 8) })],
     { timeout: 25_000, windowsHide: true }
   );
   const results: { title: string; url: string; snippet: string }[] = [];
