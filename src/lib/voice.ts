@@ -99,7 +99,12 @@ export async function learnVoice(force = false): Promise<WritingVoice | null> {
     return null;
   }
 
-  const stylePrompt = `You are a writing-style analyst. Below are writing samples from ONE person (a Kenyan tech-business owner). Produce a compact STYLE PROFILE (max 180 words) so a copywriter can imitate this person exactly. Cover: greetings/openers, sign-offs, sentence length and rhythm, formality level, Swahili/Sheng mixing (with examples), punctuation habits, words/phrases they use often, words they never use, tone with clients vs tone with staff. Output ONLY the profile text, no preamble.
+  const stylePrompt = `You are a writing-style analyst. Below are writing samples from ONE person (a Kenyan tech-business owner). Produce a compact STYLE PROFILE (max 180 words) so a copywriter can imitate this person exactly. Cover: greetings/openers, sign-offs, sentence length and rhythm, formality level, Swahili/Sheng mixing (with examples), punctuation habits, words/phrases they use often, words they never use, tone with clients vs tone with staff.
+
+FORMAT RULES (critical):
+- Your reply MUST start with the exact line "STYLE PROFILE:" and then the profile itself.
+- Describe the person's voice directly ("Opens with a casual greeting; short imperative sentences…").
+- NEVER mention samples, analysis, the task, or yourself. No preamble, no closing remarks.
 
 SAMPLES:
 ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
@@ -137,10 +142,17 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
   if (styleIdx >= 0) text = text.slice(styleIdx).replace(/^STYLE\s*PROFILE\s*:\s*/i, "");
   else {
     const paras = text.split(/\n\s*\n/);
-    const META = /^(the user|we need|we ('ll|will|have|can)|i (need|will|'ll| have)|let me|analyz|samples? (analysis|are|below|show)|here (is|'s)|first,|\- greetings|greetings\/openers)/i;
+    const META = /^(the user|we need|we ('ll|will|have|can)|i (need|will|'ll| have)|let me|analyz|look(?:ing)? at|based on|samples? (analysis|are|below|show)|here (is|'s)|first,|format rules)/i;
     while (paras.length > 1 && META.test(paras[0].trim())) paras.shift();
     text = paras.join("\n\n");
   }
+  // Any surviving line that talks ABOUT the corpus rather than the voice is dropped.
+  text = text
+    .split("\n")
+    .filter((l) => !/\bsamples?\b/i.test(l) && !/^many are\b/i.test(l.trim()))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
   const voice: WritingVoice = {
     learned_at: new Date().toISOString(),
