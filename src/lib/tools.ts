@@ -89,7 +89,7 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
   /* ---------------- Documents & payments ---------------- */
   {
     name: "create_document",
-    description: "Create a QUOTE or INVOICE with line items. Totals and numbers are computed automatically.",
+    description: "Create a QUOTE or INVOICE with line items. Totals and numbers are computed automatically. Reason the principal's free-form wording into these fields (dates, quantities, prices); only kind/client/items are required — everything else has a default: tax_rate 0, due_date +14 days, currency KES.",
     parameters: {
       type: "object",
       properties: {
@@ -100,9 +100,9 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
           type: "array",
           items: { type: "object", properties: { description: { type: "string" }, qty: { type: "number" }, unit_price: { type: "number" } }, required: ["description", "qty", "unit_price"] },
         },
-        tax_rate: { type: "number", description: "Percent" },
+        tax_rate: { type: "number", description: "Percent, default 0 — use only if the principal names a tax" },
         currency: { type: "string", default: "KES" },
-        due_date: { type: "string", description: "YYYY-MM-DD for invoices" },
+        due_date: { type: "string", description: "YYYY-MM-DD. COMPUTE from phrases like 'end of month', 'by Friday', 'net 30'; default +14 days from today" },
       },
       required: ["kind", "client", "items"],
     },
