@@ -312,7 +312,7 @@ async function streamOpenAIOnce(
   let correctiveUsed = false;
   let completenessUsed = false;
   const executedToolNames: string[] = [];
-  const toolResults: { name: string; summary: string }[] = [];
+  const toolResults: { name: string; summary: string; raw: unknown }[] = [];
 
   for (let round = 0; round < 8; round++) {
     let roundRes: { roundText: string; toolCalls: { id: string; name: string; args: string }[] };
@@ -357,6 +357,7 @@ async function streamOpenAIOnce(
         toolResults.push({
           name: call.name,
           summary: JSON.stringify(result).replace(/[{}"\\\[\]]/g, "").slice(0, 140),
+          raw: result,
         });
         messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result).slice(0, 1500) });
       }
@@ -416,6 +417,20 @@ async function streamOpenAIOnce(
   if (executedToolNames.length === 0 && /\btool_call\b/i.test(finalText)) {
     throw new Error("model emitted tool calls as text — no streaming tool support");
   }
+
+  // NARRATION RESCUE — tools executed but the model's prose is garbled or a raw JSON
+  // echo. Replace it with a clean confirmation synthesized from the REAL tool results
+  // (every field comes from what actually ran — nothing is invented), and reset the
+  // console bubble so the streamed garble is wiped before the clean line appears.
+  const jsonEcho = /:\s*ok:(true|false)|\{"\s*ok|number:\s*[A-Z]{3}-/.test(finalText);
+  if (executedToolNames.length > 0 && (garbleScore(finalText) >= 2 || jsonEcho)) {
+    const clean =
+      "Done, sir.\n" +
+      toolResults.map((t) => `· ${prettyToolLine(t.name, t.raw)}`).join("\n");
+    emit({ type: "reset" });
+    emit({ type: "text", delta: clean });
+    finalText = clean;
+  }
   return finalText;
 }
 
@@ -438,6 +453,36 @@ function garbleScore(text: string): number {
   const fusedWords = (text.match(/[a-z]{4,}[A-Z][a-z]{3,}/g) ?? []).length; // words smashed together ("dueCreated")
   const total = fusedDigits + fusedWords;
   return total >= 3 ? 2 : fusedDigits >= 2 ? 1 : 0;
+}
+
+/**
+ * Human one-liner from a REAL tool result. Reads only fields the tool actually
+ * returned — never invents. Unknown tools fall back to name + compact summary.
+ */
+function prettyToolLine(name: string, raw: unknown): string {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const s = (k: string): string => (typeof r[k] === "string" || typeof r[k] === "number" ? String(r[k]) : "");
+  switch (name) {
+    case "create_document": {
+      const kind = s("kind") || "Document";
+      const num = s("number");
+      const client = s("client");
+      const total = s("total");
+      const due = s("due_date");
+      return `${kind.charAt(0)}${kind.slice(1).toLowerCase()} ${num} created for ${client} — KES ${total}${due ? `, due ${due}` : ""}`;
+    }
+    case "add_lead": {
+      const who = s("company") || s("contact") || s("name") || "Lead";
+      const email = s("email");
+      return `Lead saved: ${who}${email ? ` (${email})` : ""}`;
+    }
+    case "record_payment":
+      return `Payment recorded: KES ${s("amount") || "?"}${s("receipt_number") ? ` — receipt ${s("receipt_number")}` : ""}`;
+    default: {
+      const summary = JSON.stringify(raw ?? {}).replace(/[{}"\\\[\]]/g, "").slice(0, 120);
+      return `${name}: ${summary || "done"}`;
+    }
+  }
 }
 
 async function runOpenAIPool(
