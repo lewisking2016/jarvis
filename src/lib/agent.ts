@@ -516,7 +516,7 @@ function prettyToolLine(name: string, raw: unknown, args: Record<string, unknown
           else leaves.push(`${prefix ? `${prefix}.` : ""}${k.replace(/_/g, " ")} → ${String(v)}`);
         }
       };
-      walk(args.patch as Record<string, unknown> | undefined, "");
+      walk((args.patch ?? {}) as Record<string, unknown>, "");
       return `Profile updated${leaves.length ? `: ${leaves.slice(0, 4).join(", ")}` : ""} — on record permanently`;
     }
     case "record_payment": {
