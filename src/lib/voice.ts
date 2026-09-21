@@ -34,10 +34,11 @@ export function collectPrincipalWriting(maxChars = 9000): { samples: string[]; s
   const samples: string[] = [];
   const sources: string[] = [];
 
-  // 1. sent emails (email sends log the subject + body excerpt)
+  // 1. sent emails — EMAIL_SENT logs metadata only, so pair it with the outreach
+  // sequence store (which keeps the composed bodies) when present.
   try {
     const acts = db
-      .prepare("SELECT detail FROM activity WHERE action IN ('EMAIL_SENT','OUTREACH_SENT') ORDER BY id DESC LIMIT 80")
+      .prepare("SELECT detail FROM activity WHERE action IN ('EMAIL_SENT','OUTREACH_SENT','LINKEDIN_SENT') ORDER BY id DESC LIMIT 80")
       .all() as { detail: string }[];
     for (const a of acts) {
       const body = a.detail;
@@ -48,16 +49,29 @@ export function collectPrincipalWriting(maxChars = 9000): { samples: string[]; s
     }
   } catch { /* table shape may vary */ }
 
+  // 1b. composed email bodies stored by the outreach engine (the actual prose)
+  try {
+    const rows = db.prepare("SELECT body FROM outreach_queue WHERE body IS NOT NULL AND status='sent' ORDER BY id DESC LIMIT 40").all() as { body: string }[];
+    for (const r of rows) if (r.body && r.body.length > 40) { samples.push(r.body.slice(0, 1200)); sources.push("outreach-body"); }
+  } catch { /* table optional */ }
+  try {
+    const rows = db.prepare("SELECT payload_json FROM sequences ORDER BY id DESC LIMIT 30").all() as { payload_json: string }[];
+    for (const r of rows) {
+      try { const j = JSON.parse(r.payload_json) as { body?: string; message?: string }; const b = j.body ?? j.message; if (b && b.length > 40) { samples.push(b.slice(0, 1200)); sources.push("sequence-body"); } } catch { /* skip */ }
+    }
+  } catch { /* table optional */ }
+
   // 2. notes the principal wrote
   try {
-    const notes = db.prepare("SELECT body FROM notes WHERE author LIKE '%lewis%' OR author LIKE '%principal%' ORDER BY id DESC LIMIT 40").all() as { body: string }[];
-    for (const n of notes) if (n.body && n.body.length > 40) { samples.push(n.body.slice(0, 800)); sources.push("note"); }
-  } catch { /* try alternate column */ }
+    const notes = db.prepare("SELECT content FROM notes ORDER BY id DESC LIMIT 40").all() as { content: string }[];
+    for (const n of notes) if (n.content && n.content.length > 40) { samples.push(n.content.slice(0, 800)); sources.push("note"); }
+  } catch { /* optional */ }
 
-  // 3. the principal's chat directives (how he actually talks)
+  // 3. the principal's chat directives (how he actually talks) — the chat route
+  // logs every principal message under action 'CHAT'.
   try {
     const acts = db
-      .prepare("SELECT detail FROM activity WHERE action = 'CHAT_DIRECTIVE' ORDER BY id DESC LIMIT 60")
+      .prepare("SELECT detail FROM activity WHERE action IN ('CHAT','WHATSAPP_PRINCIPAL') ORDER BY id DESC LIMIT 80")
       .all() as { detail: string }[];
     for (const a of acts) if (a.detail && a.detail.length > 15) { samples.push(a.detail.slice(0, 300)); sources.push("chat"); }
   } catch { /* optional */ }
