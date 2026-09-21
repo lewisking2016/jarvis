@@ -487,12 +487,13 @@ function prettyToolLine(name: string, raw: unknown, args: Record<string, unknown
   const s = (k: string): string => (typeof r[k] === "string" || typeof r[k] === "number" ? String(r[k]) : "");
   switch (name) {
     case "create_document": {
-      const kind = s("kind") || "Document";
+      const kindRaw = s("kind") || "Document";
+      const kind = kindRaw.charAt(0) + kindRaw.slice(1).toLowerCase();
       const num = s("number");
-      const client = s("client");
+      const client = s("client") || (typeof args.client === "string" ? args.client : "");
       const total = s("total");
-      const due = s("due_date");
-      return `${kind.charAt(0)}${kind.slice(1).toLowerCase()} ${num} created for ${client} — KES ${total}${due ? `, due ${due}` : ""}`;
+      const due = s("due_date") || (typeof args.due_date === "string" ? args.due_date : "");
+      return `${kind} ${num} created for ${client || "the client"} — KES ${Number(total).toLocaleString("en-US")}${due ? `, due ${due}` : ""}`;
     }
     case "add_lead": {
       const who = s("company") || s("contact") || s("name") || "Lead";

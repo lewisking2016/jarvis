@@ -125,7 +125,7 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
         .prepare("INSERT INTO documents (kind, number, client, client_phone, items_json, currency, tax_rate, total, status, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(kind, number, String(a.client), a.client_phone ? String(a.client_phone) : null, JSON.stringify(items), a.currency ? String(a.currency) : "KES", taxRate, total, kind === "INVOICE" ? "sent" : "draft", due);
       logActivity("DOC_CREATED", `${number} ${a.client} — ${total}`);
-      return { ok: true, number, subtotal: round2(subtotal), tax: round2((subtotal * taxRate) / 100), total };
+      return { ok: true, number, kind, client: String(a.client), subtotal: round2(subtotal), tax: round2((subtotal * taxRate) / 100), total, due_date: due };
     },
   },
   {
