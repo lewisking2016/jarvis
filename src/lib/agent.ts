@@ -26,6 +26,30 @@ export interface ChatTurn {
   text: string;
 }
 
+/**
+ * TOKEN BUDGET — history is the silent cost driver: every turn re-sends the whole
+ * conversation to the brain. Cap it by characters (~4 chars/token): keep the most
+ * recent turns within budget, give the newest message extra room, and drop older
+ * turns entirely once the budget is spent. JARVIS is a manager, not an archivist —
+ * verbatim old turns add nothing the memory core doesn't already persist.
+ */
+const HISTORY_CHAR_BUDGET = Number(process.env.JARVIS_HISTORY_BUDGET ?? 6000);
+
+export function budgetHistory(history: ChatTurn[]): ChatTurn[] {
+  if (history.length <= 1) return history;
+  const out: ChatTurn[] = [];
+  let used = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const turn = history[i];
+    const cap = i === history.length - 1 ? 4000 : 1200; // the live directive gets the most room
+    const text = turn.text.length > cap ? turn.text.slice(0, cap) : turn.text;
+    if (out.length > 0 && used + text.length > HISTORY_CHAR_BUDGET) break;
+    used += text.length;
+    out.unshift({ ...turn, text });
+  }
+  return out;
+}
+
 interface RunOpts {
   history: ChatTurn[];
   onEvent: (e: AgentEvent) => void;
@@ -80,7 +104,7 @@ async function runGemini(opts: RunOpts, builtin: ToolDef[], mcp: McpTool[]): Pro
   }));
 
   const contents: { role: string; parts: Record<string, unknown>[] }[] = [
-    ...opts.history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
+    ...budgetHistory(opts.history).map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
   ];
   let finalText = "";
 
@@ -199,7 +223,7 @@ async function streamOpenAIOnce(
 
   const messages: Record<string, unknown>[] = [
     { role: "system", content: `${JARVIS_SYSTEM_PROMPT}\n\n${memoryHeader(opts.history.at(-1)?.text)}` },
-    ...opts.history.map((h) => ({ role: h.role === "model" ? "assistant" : "user", content: h.text })),
+    ...budgetHistory(opts.history).map((h) => ({ role: h.role === "model" ? "assistant" : "user", content: h.text })),
   ];
 
   /** Streams one round; returns this round's text and any tool calls. */
@@ -334,7 +358,7 @@ async function streamOpenAIOnce(
           name: call.name,
           summary: JSON.stringify(result).replace(/[{}"\\\[\]]/g, "").slice(0, 140),
         });
-        messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result).slice(0, 4000) });
+        messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result).slice(0, 1500) });
       }
       // After two tool rounds, hold the model to directive actions it still has not executed
       // (e.g. compulsive reads while the directed writes never happen).
