@@ -112,6 +112,7 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
   // one brain call through the same pool the agent uses
   const { chain } = await rankedChain();
   let text = "";
+  let rawText = "";
   for (const c of chain) {
     if (breakerOpen(candidateKey(c))) continue;
     const baseUrl = c.provider?.baseUrlEnv ? (process.env[c.provider.baseUrlEnv] ?? c.provider.baseUrl) : (c.provider?.baseUrl ?? "https://openrouter.ai/api/v1");
@@ -131,13 +132,13 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
       if (!res.ok) continue;
       const j = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       const out = j.choices?.[0]?.message?.content?.trim() ?? "";
-      if (out.length > 80) { text = out; break; }
+      if (out.length > 80) { text = out; rawText = out; break; }
     } catch { /* next brain */ }
   }
   if (!text) return null;
   // Reasoning models leak meta-analysis ("The user wants… I need to analyze…").
   // Keep only the actual profile: prefer text after a STYLE marker, else drop
-  // leading meta sentences.
+  // leading meta sentences. The RAW output is the fallback if stripping empties it.
   const styleIdx = text.search(/STYLE\s*PROFILE\s*:/i);
   if (styleIdx >= 0) text = text.slice(styleIdx).replace(/^STYLE\s*PROFILE\s*:\s*/i, "");
   else {
@@ -146,13 +147,8 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
     while (paras.length > 1 && META.test(paras[0].trim())) paras.shift();
     text = paras.join("\n\n");
   }
-  // Any surviving line that talks ABOUT the corpus rather than the voice is dropped.
-  text = text
-    .split("\n")
-    .filter((l) => !/\bsamples?\b/i.test(l) && !/^many are\b/i.test(l.trim()))
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  // Backstop: a verbose honest profile beats an empty one.
+  if (text.trim().length < 80) text = rawText;
 
   const voice: WritingVoice = {
     learned_at: new Date().toISOString(),
