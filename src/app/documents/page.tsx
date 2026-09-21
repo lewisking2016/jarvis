@@ -24,6 +24,7 @@ interface Doc {
   total: number;
   status: string;
   due_date: string | null;
+  payment_info?: string | null;
   created_at: string;
 }
 
@@ -41,6 +42,7 @@ interface FormState {
   due_date: string;
   tax_rate: string;
   status: string;
+  payment_info: string;
   items: ItemRow[];
 }
 
@@ -52,6 +54,7 @@ const EMPTY_FORM: FormState = {
   due_date: "",
   tax_rate: "16",
   status: "draft",
+  payment_info: "",
   items: [{ description: "", qty: "1", unit_price: "" }],
 };
 
@@ -99,6 +102,7 @@ export default function DocumentsPage() {
       due_date: d.due_date?.slice(0, 10) ?? "",
       tax_rate: String(d.tax_rate ?? 0),
       status: d.status,
+      payment_info: d.payment_info ?? "",
       items: (d.items ?? []).map((i) => ({ description: i.description, qty: String(i.qty), unit_price: String(i.unit_price) })),
     });
     setMsg(null);
@@ -128,6 +132,7 @@ export default function DocumentsPage() {
         tax_rate: num(form.tax_rate),
         status: form.status,
         due_date: form.due_date || undefined,
+        payment_info: form.payment_info || undefined,
       };
       const r = await apiFetch<{ document?: { number?: string } }>("/api/documents", {
         method: form.id !== null ? "PATCH" : "POST",
@@ -163,7 +168,7 @@ export default function DocumentsPage() {
         right={
           <div className="flex gap-1">
             {FILTERS.map((f) => (
-              <button key={f} className={`btn ${filter === f ? "text-cyan-300" : ""}`} onClick={() => setFilter(f)}>
+              <button key={f} className={`btn shrink-0 whitespace-nowrap ${filter === f ? "text-cyan-300" : ""}`} onClick={() => setFilter(f)}>
                 {f}
               </button>
             ))}
@@ -251,13 +256,22 @@ export default function DocumentsPage() {
               <input className="input w-full" placeholder="Client *" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
               <input className="input w-full" placeholder="Client phone (+2547…)" value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
               <div className="flex gap-2">
-                <input className="input flex-1" type="date" title="Due date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-                <select className="input flex-1" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                <input className="input flex-1 min-w-0" type="date" title="Due date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+                <select className="input flex-1 min-w-0" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                   {STATUSES.map((s) => (
                     <option key={s} value={s} className="bg-slate-900">{s}</option>
                   ))}
                 </select>
               </div>
+              {(form.kind === "INVOICE" || form.kind === "RECEIPT") && (
+                <input
+                  className="input w-full min-w-0"
+                  placeholder="Payment code — M-Pesa paybill/till number"
+                  inputMode="numeric"
+                  value={form.payment_info}
+                  onChange={(e) => setForm({ ...form, payment_info: e.target.value })}
+                />
+              )}
 
               <p className="k pt-1">Line items</p>
               {form.items.map((it, idx) => (

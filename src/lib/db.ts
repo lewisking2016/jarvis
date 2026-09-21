@@ -193,6 +193,8 @@ export function getDb(): DatabaseSync {
     // migrations for databases created before a column existed
     const txCols = (db.prepare("PRAGMA table_info(transactions)").all() as { name: string }[]).map((c) => c.name);
     if (!txCols.includes("balance")) db.exec("ALTER TABLE transactions ADD COLUMN balance REAL");
+    const docCols = (db.prepare("PRAGMA table_info(documents)").all() as { name: string }[]).map((c) => c.name);
+    if (!docCols.includes("payment_info")) db.exec("ALTER TABLE documents ADD COLUMN payment_info TEXT");
 
     seedIdentityIfEmpty();
   }

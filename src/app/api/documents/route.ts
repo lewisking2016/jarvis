@@ -59,13 +59,14 @@ export async function POST(req: NextRequest): Promise<Response> {
   const status = String(b.status ?? (kind === "RECEIPT" ? "issued" : "draft")).trim() || "draft";
   const due = b.due_date ? String(b.due_date).slice(0, 10) : null;
   const phone = b.client_phone ? String(b.client_phone).trim() : null;
+  const paymentInfo = b.payment_info ? String(b.payment_info).trim().slice(0, 200) || null : null;
 
   const r = getDb()
     .prepare(
-      `INSERT INTO documents (kind, number, client, client_phone, items_json, currency, tax_rate, total, status, due_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO documents (kind, number, client, client_phone, items_json, currency, tax_rate, total, status, due_date, payment_info)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .run(kind, number, client, phone, JSON.stringify(items), String(b.currency ?? "KES") || "KES", taxRate, total, status, due);
+    .run(kind, number, client, phone, JSON.stringify(items), String(b.currency ?? "KES") || "KES", taxRate, total, status, due, paymentInfo);
 
   logActivity("DOC_CREATED", `${number} — ${client} — ${round2(total)} KES (${items.length} items)`, "PRINCIPAL");
   return Response.json({ document: { id: Number(r.lastInsertRowid), number, total } }, { status: 201 });
@@ -87,6 +88,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     total: number;
     status: string;
     due_date: string | null;
+    payment_info: string | null;
   } = {
     client: String(row.client),
     client_phone: row.client_phone ? String(row.client_phone) : null,
@@ -95,6 +97,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     total: Number(row.total) || 0,
     status: String(row.status),
     due_date: row.due_date ? String(row.due_date) : null,
+    payment_info: row.payment_info ? String(row.payment_info) : null,
   };
 
   if (b.client !== undefined) {
@@ -103,6 +106,7 @@ export async function PATCH(req: NextRequest): Promise<Response> {
     next.client = client;
   }
   if (b.client_phone !== undefined) next.client_phone = b.client_phone ? String(b.client_phone).trim() : null;
+  if (b.payment_info !== undefined) next.payment_info = b.payment_info ? String(b.payment_info).trim().slice(0, 200) || null : null;
   if (b.status !== undefined) next.status = String(b.status).trim() || "draft";
   if (b.due_date !== undefined) next.due_date = b.due_date ? String(b.due_date).slice(0, 10) : null;
   if (b.tax_rate !== undefined) next.tax_rate = Math.max(0, Math.min(100, Number(b.tax_rate) || 0));
@@ -116,8 +120,8 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   next.total = computeTotal(JSON.parse(next.items_json) as DocItem[], next.tax_rate);
 
   db.prepare(
-    `UPDATE documents SET client = ?, client_phone = ?, items_json = ?, tax_rate = ?, total = ?, status = ?, due_date = ? WHERE id = ?`
-  ).run(next.client, next.client_phone, next.items_json, next.tax_rate, next.total, next.status, next.due_date, id);
+    `UPDATE documents SET client = ?, client_phone = ?, items_json = ?, tax_rate = ?, total = ?, status = ?, due_date = ?, payment_info = ? WHERE id = ?`
+  ).run(next.client, next.client_phone, next.items_json, next.tax_rate, next.total, next.status, next.due_date, next.payment_info, id);
 
   logActivity("DOC_UPDATED", `${String(row.number)} — ${String(next.client)} — ${Number(next.total).toFixed(2)} KES · status ${String(next.status)}`, "PRINCIPAL");
   return Response.json({ document: { id, number: row.number, total: next.total, status: next.status } });

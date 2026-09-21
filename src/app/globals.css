@@ -20,6 +20,18 @@
 
 html, body { background: var(--bg); color: var(--ink); }
 
+/* ── no horizontal page scroll, ever ──────────────────
+   Wide tables scroll inside their own panel instead of
+   stretching the page; flex/grid children are allowed to
+   shrink so long inputs can't force overflow. */
+html, body { overflow-x: hidden; max-width: 100vw; }
+.panel > *,
+.grid > *,
+.flex > * { min-width: 0; }
+.input, select.input, textarea.input { box-sizing: border-box; max-width: 100%; }
+.panel:has(.dtable) { overflow-x: auto; }
+.dtable { min-width: 560px; }
+
 /* ── ambient background ─────────────────────────────── */
 .hud-root {
   background:

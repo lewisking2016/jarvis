@@ -32,6 +32,7 @@ export interface DocRow {
   total: number;
   status: string;
   due_date: string | null;
+  payment_info?: string | null;
   created_at: string;
   linked_doc?: number | null;
 }
@@ -201,14 +202,15 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
       y += 26;
 
       /* ── kind-specific blocks ── */
-      if (isInvoice) {
-        const ph = 74;
+      if (isInvoice || isReceipt) {
+        const ph = 86;
         pdf.roundedRect(L, y, CW, ph, 5).fillAndStroke(SOFT, LINE);
         pdf.fillColor(ACCENT_DARK).font("Helvetica-Bold").fontSize(8).text("PAYMENT DETAILS", L + 14, y + 10);
         pdf.font("Helvetica").fontSize(9).fillColor(INK)
-          .text("M-PESA PAYBILL:  [paybill number]", L + 14, y + 27)
-          .text("Account reference:  " + doc.number, L + 14, y + 42)
-          .text("Bank transfer details available on request — info@imeantech.com", L + 14, y + 57);
+          .text("Amount due (KES):  " + fmt(doc.total), L + 14, y + 27)
+          .text("Pay via M-PESA — Paybill/Till:  " + (doc.payment_info || "to be advised"), L + 14, y + 42)
+          .text("Account reference:  " + doc.number, L + 14, y + 57)
+          .text("Bank transfer:  IMT General System — details on request (info@imeantech.com)", L + 14, y + 72);
         y += ph + 16;
       }
 
