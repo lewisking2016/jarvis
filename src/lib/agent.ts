@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { BUILT_IN_TOOLS } from "./tools";
 import { SKILL_TOOLS } from "./skills";
 import { discoverMcpTools, type McpTool } from "./mcp";
-import { JARVIS_SYSTEM_PROMPT } from "./system";
+import { buildSystemPrompt } from "./system";
 import { memoryHeader, remember } from "./memory";
 import { processDue } from "./outreach";
 import { runDistiller } from "./distiller";
@@ -94,7 +94,7 @@ async function runGemini(opts: RunOpts, builtin: ToolDef[], mcp: McpTool[]): Pro
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set in .env");
   const ai = new GoogleGenAI({ apiKey });
   const model = process.env.JARVIS_MODEL || "gemini-2.5-flash";
-  const systemPrompt = `${JARVIS_SYSTEM_PROMPT}\n\n${memoryHeader(opts.history.at(-1)?.text)}`;
+  const systemPrompt = `${buildSystemPrompt()}\n\n${memoryHeader(opts.history.at(-1)?.text)}`;
 
   const all = [...builtin, ...mcp];
   const declarations = all.map((t) => ({
@@ -222,7 +222,7 @@ async function streamOpenAIOnce(
   }));
 
   const messages: Record<string, unknown>[] = [
-    { role: "system", content: `${JARVIS_SYSTEM_PROMPT}\n\n${memoryHeader(opts.history.at(-1)?.text)}` },
+    { role: "system", content: `${buildSystemPrompt()}\n\n${memoryHeader(opts.history.at(-1)?.text)}` },
     ...budgetHistory(opts.history).map((h) => ({ role: h.role === "model" ? "assistant" : "user", content: h.text })),
   ];
 

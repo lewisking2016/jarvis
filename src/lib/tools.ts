@@ -2,6 +2,7 @@ import os from "node:os";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { getDb, nextDocNumber, logActivity } from "./db";
+import { getProfile, saveProfile } from "./profile";
 import { insertTransaction, financialStatus, matchPayment, issueReceipt, round2 } from "./money";
 import { revenueStatus } from "./revenue";
 import { scheduleSequence, classifyReply } from "./outreach";
@@ -297,6 +298,30 @@ export const BUILT_IN_TOOLS: ToolDef[] = [
     handler: (a) => {
       const id = createApproval(String(a.kind), String(a.summary), a.payload);
       return { ok: true, id, note: "Awaiting the principal's yes in Approvals." };
+    },
+  },
+
+  /* ---------------- Company profile ---------------- */
+  {
+    name: "get_profile",
+    description: "Read the company profile: current prices, terms, contacts, targets — the ground truth used to fill thin requests.",
+    parameters: { type: "object", properties: {}, required: [] },
+    handler: () => getProfile(),
+  },
+  {
+    name: "update_profile",
+    description: 'Permanently update company facts when the principal states them ("we now charge 45k per laptop", "our till is 555333", "we also do solar installs"). Pass ONLY the fields being set/corrected; nested paths via objects (e.g. { payment: { till: "555333" } }); null clears a field. Never re-ask a fact that lives here.',
+    parameters: {
+      type: "object",
+      properties: {
+        patch: { type: "object", description: "The fields to set, merged deep into the profile", additionalProperties: true },
+      },
+      required: ["patch"],
+    },
+    handler: (a) => {
+      const next = saveProfile((a.patch ?? {}) as Record<string, unknown>, "principal");
+      logActivity("PROFILE_UPDATE", JSON.stringify(a.patch).slice(0, 160));
+      return { ok: true, profile: next };
     },
   },
 
