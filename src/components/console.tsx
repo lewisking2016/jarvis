@@ -360,39 +360,47 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
   }, [voiceOn, stopSpeaking]);
 
   // speak jarvis replies WHILE they stream: enqueue each completed sentence as it
-  // arrives; when the stream ends, flush any remaining tail.
+  // arrives; when the stream ends, flush any remaining tail. The cursor is keyed to
+  // the reply bubble AFTER the latest user message — never the previous turn's
+  // reply — so a new send can't replay stale audio or eat the fresh reply.
   const spokenLenRef = useRef(0);
-  const lastReply = [...chat.bubbles].reverse().find((b) => b.role === "jarvis" && b.text.length > 0);
+  const spokenForRef = useRef(-1);
+  let lastUserIdx = -1;
+  for (let i = chat.bubbles.length - 1; i >= 0; i--) {
+    if (chat.bubbles[i].role === "user") { lastUserIdx = i; break; }
+  }
+  const replyIdx = lastUserIdx >= 0 ? chat.bubbles.findIndex((b, i) => i > lastUserIdx && b.role === "jarvis") : -1;
+  const reply = replyIdx >= 0 ? chat.bubbles[replyIdx] : undefined;
   useEffect(() => {
-    if (!lastReply) return;
-    const text = lastReply.text;
+    if (replyIdx !== spokenForRef.current) {
+      spokenForRef.current = replyIdx;
+      spokenLenRef.current = 0;
+    }
+    if (replyIdx < 0 || !reply?.text) return;
+    const text = reply.text;
+    const flushTo = (end: number): void => {
+      speakRef.current(text.slice(spokenLenRef.current, end));
+      spokenLenRef.current = end;
+    };
     if (chat.busy) {
-      if (voiceOn && text.length - spokenLenRef.current >= 80) {
+      // stream: speak sentence-by-sentence as soon as a full sentence exists
+      if (voiceOn && text.length - spokenLenRef.current >= 40) {
         const punct = Math.max(
-          text.lastIndexOf(". ", spokenLenRef.current + 40),
-          text.lastIndexOf("! ", spokenLenRef.current + 40),
-          text.lastIndexOf("? ", spokenLenRef.current + 40),
-          text.lastIndexOf("\n", spokenLenRef.current + 40)
+          text.lastIndexOf(". ", spokenLenRef.current + 20),
+          text.lastIndexOf("! ", spokenLenRef.current + 20),
+          text.lastIndexOf("? ", spokenLenRef.current + 20),
+          text.lastIndexOf("\n", spokenLenRef.current + 20)
         );
-        if (punct > spokenLenRef.current) {
-          speakRef.current(text.slice(spokenLenRef.current, punct + 1));
-          spokenLenRef.current = punct + 1;
-        }
+        if (punct > spokenLenRef.current) flushTo(punct + 1);
       }
     } else if (text.length > spokenLenRef.current) {
-      const tail = text.slice(spokenLenRef.current);
-      spokenLenRef.current = text.length;
-      if (tail.trim()) speakRef.current(tail);
+      flushTo(text.length);
     }
     if (!chat.busy) lastSpokenRef.current = Date.now();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastReply?.text, chat.busy]);
+  }, [reply?.text, replyIdx, chat.busy, voiceOn]);
 
-  // a new user message resets the spoken-cursor for the fresh reply bubble
-  const bubbleCount = chat.bubbles.length;
-  useEffect(() => {
-    spokenLenRef.current = 0;
-  }, [bubbleCount]);
+
 
   const toggleMic = useCallback(() => {
     const w = window as unknown as {
