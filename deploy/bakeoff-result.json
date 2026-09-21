@@ -1,0 +1,199 @@
+[
+ {
+  "id": "auto",
+  "errors": [],
+  "firstByteMs": 1449,
+  "ms1": 1449,
+  "round1": {
+   "ok": true,
+   "kind": "quote",
+   "client": "Tesh Limited",
+   "total": 59500,
+   "mathOk": true,
+   "dueOk": true
+  },
+  "ms2": 872,
+  "narration": {
+   "clean": true,
+   "quotesReal": true,
+   "text": "Quote **QTE-2026-0099** raised for Tesh Limited.\n\n- 3 × Access control units @ KES 18,500 = KES 55,500\n- Installation = KES 4,000\n- **Total: KES 59,500**\n- Due "
+  },
+  "score": 100
+ },
+ {
+  "id": "Qwen/Qwen3.8-27B",
+  "errors": [],
+  "firstByteMs": 446,
+  "ms1": 643,
+  "round1": {
+   "ok": true,
+   "kind": "quote",
+   "client": "Tesh Limited",
+   "total": 59500,
+   "mathOk": true,
+   "dueOk": true
+  },
+  "ms2": 557,
+  "narration": {
+   "clean": true,
+   "quotesReal": true,
+   "text": "\n\nDone! Quote **QTE-2026-0099** raised for Tesh Limited:\n\n- 3 × Access Control Units @ KES 18,500 — KES 55,500\n- Installation — KES 4,000\n- **Total: KES 59,500*"
+  },
+  "score": 100
+ },
+ {
+  "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "errors": [],
+  "firstByteMs": 817,
+  "ms1": 2066,
+  "round1": {
+   "ok": true,
+   "kind": "quote",
+   "client": "Tesh Limited",
+   "total": 59500,
+   "mathOk": true,
+   "dueOk": true
+  },
+  "ms2": 4440,
+  "narration": {
+   "clean": true,
+   "quotesReal": true,
+   "text": "Quote iko tayari, boss. 🎩\n\n**QTE-2026-0099 — Tesh Limited**\n- 3 × Access control unit @ 18,500 = 55,500\n- 1 × Installation = 4,000\n- **Total: KES 59,500**\n- Pa"
+  },
+  "score": 100
+ },
+ {
+  "id": "moonshotai/Kimi-K3",
+  "errors": [],
+  "firstByteMs": 3286,
+  "ms1": 6879,
+  "round1": {
+   "ok": true,
+   "kind": "quote",
+   "client": "Tesh Limited",
+   "total": 59500,
+   "mathOk": true,
+   "dueOk": true
+  },
+  "ms2": 3669,
+  "narration": {
+   "clean": true,
+   "quotesReal": true,
+   "text": "Done ✅ Quote **QTE-2026-0099** raised for **Tesh Limited**:\n\n- 3 × Access Control Units @ KES 18,500 = KES 55,500\n- Installation = KES 4,000\n- **Total: KES 59,5"
+  },
+  "score": 100
+ },
+ {
+  "id": "dots-studio/dots-3-note-preview:free",
+  "errors": [
+   "r1:math-wrong(NaN)"
+  ],
+  "firstByteMs": 1950,
+  "ms1": 5873,
+  "round1": {
+   "ok": true,
+   "kind": "quote",
+   "client": "Tesh Limited",
+   "total": null,
+   "mathOk": false,
+   "dueOk": true
+  },
+  "ms2": 5315,
+  "narration": {
+   "clean": false,
+   "why": "empty"
+  },
+  "score": 40
+ },
+ {
+  "id": "inclusionai/ling-3.0-flash-vl:free",
+  "errors": [
+   "r1:bad-json"
+  ],
+  "firstByteMs": 1374,
+  "ms1": 5545,
+  "round1": {
+   "ok": false
+  },
+  "score": 20
+ },
+ {
+  "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "errors": [
+   "r1:HTTP 404"
+  ],
+  "score": 0
+ },
+ {
+  "id": "nvidia/nemotron-3.5-lightning:free",
+  "errors": [
+   "r1:HTTP 404"
+  ],
+  "score": 0
+ },
+ {
+  "id": "google/gemma-4-26b-a4b-it:free",
+  "errors": [
+   "r1:HTTP 429"
+  ],
+  "score": 0
+ },
+ {
+  "id": "nvidia/nemotron-3-super-120b-a12b:free",
+  "errors": [
+   "r1:HTTP 404"
+  ],
+  "score": 0
+ },
+ {
+  "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "errors": [
+   "r1:HTTP 404"
+  ],
+  "score": 0
+ },
+ {
+  "id": "nvidia/nemotron-3.5-content-safety:free",
+  "errors": [
+   "r1:HTTP 404"
+  ],
+  "score": 0
+ },
+ {
+  "id": "google/gemma-4-31b-it:free",
+  "errors": [
+   "r1:HTTP 429"
+  ],
+  "score": 0
+ },
+ {
+  "id": "nvidia/nemotron-3-super-120b-a12b",
+  "errors": [
+   "r1:no-tool(none, narrated=)"
+  ],
+  "firstByteMs": 1054,
+  "ms1": 1055,
+  "score": 0
+ },
+ {
+  "id": "openrouter/gpt-oss-120b",
+  "errors": [
+   "r1:HTTP 404"
+  ],
+  "score": 0
+ },
+ {
+  "id": "deepseek-v4.1-flash",
+  "errors": [
+   "r1:HTTP 402"
+  ],
+  "score": 0
+ },
+ {
+  "id": "qwen-3-8-27b",
+  "errors": [
+   "r1:HTTP 402"
+  ],
+  "score": 0
+ }
+]

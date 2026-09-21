@@ -19,15 +19,11 @@ export const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
  *  NB: some catalog-listed free models reject plain API calls ("agentic harnesses only") —
  *  they are handled by the breaker + classifier, never by trusting the catalog blindly. */
 export const FREE_MODEL_CHAIN = [
-  "nvidia/nemotron-3.5-lightning:free", // 1,048,576 ctx — fast, verified tools
-  "dots-studio/dots-3-note-preview:free", // 524,288 ctx
-  "inclusionai/ling-3.0-flash-vl:free", // 262,144 ctx — vision
+  "moonshotai/Kimi-K3:free", // 2026-09-21 bake-off: 100/100 — tools+math+narration clean
+  "dots-studio/dots-3-note-preview:free", // 524,288 ctx — bake-off 40/100 (math flaky) but alive
+  "inclusionai/ling-3.0-flash-vl:free", // 262,144 ctx — vision fallback when images attached
   "nex-agi/nex-n2.5-mini:free", // 262,144 ctx
-  "inclusionai/ling-3.0-flash-fin:free", // 262,144 ctx
-  "inclusionai/ling-3.0-flash-sante:free", // 262,144 ctx
-  "nex-agi/nex-n2.5-pro:free", // 262,144 ctx
-  "nvidia/nemotron-3-ultra-550b-a55b:free", // LAST RESORT — leaks interleaved thinking into content (garbled narration); only when everything else is capped
-  "qwen/qwen3.8-27b:free", // 262,144 ctx
+  "qwen/qwen3.8-27b:free", // 262,144 ctx — HF twin won the bake-off
   "poolside/laguna-s-2.1:free", // 262,144 ctx
 ] as const;
 
@@ -52,18 +48,15 @@ export interface ProviderDef {
 
 /** Additional OpenAI-compatible free providers — any key present in .env joins the pool. */
 export const EXTRA_PROVIDERS: ProviderDef[] = [
-  // ORDER MATTERS: tool-proven direct providers walk first; combo/aggregator tiers follow.
+  // ORDER MATTERS: bake-off winners walk first; everything else is backup.
   {
-    id: "nvidia",
-    baseUrl: "https://integrate.api.nvidia.com/v1",
-    keyEnv: "NVIDIA_API_KEY",
-    // Tool-proven against the live NIM API (2026-09-20 probes with a real tools
-    // request): only these two emit tool_calls. mistral-nemotron (narrator),
-    // gpt-oss-20b (flaky 404) and lightning (narrator) are excluded on purpose.
-    models: [
-      "nvidia/nemotron-3-super-120b-a12b",
-      "nvidia/nemotron-3-ultra-550b-a55b",
-    ],
+    // HuggingFace Inference Providers router — 2026-09-21 bake-off: THREE models
+    // scored 100/100 (messy directive → correct tool call + math → clean narration).
+    // Qwen3.8-27B: 0.45s first byte; Kimi-K3: 3.3s; DeepSeek-V4.1-Flash: 0.8s.
+    id: "huggingface",
+    baseUrl: "https://router.huggingface.co/v1",
+    keyEnv: "HUGGINGFACE_API_KEY",
+    models: ["Qwen/Qwen3.8-27B", "moonshotai/Kimi-K3", "deepseek-ai/DeepSeek-V4.1-Flash"],
   },
   {
     // FreeLLMAPI (deploy/freellm-deploy.mjs): 295 free models across 21 platforms
@@ -73,9 +66,16 @@ export const EXTRA_PROVIDERS: ProviderDef[] = [
     baseUrl: "http://localhost:3001/v1",
     baseUrlEnv: "FREELLMAPI_BASE_URL",
     keyEnv: "FREELLMAPI_API_KEY",
-    // "auto" = their balanced router (DeepSeek-R1 via HuggingFace today): clean
-    // narration, reliable tools — preferred backup over the NVIDIA 550B narrator.
-    models: ["auto", "moonshotai/Kimi-K3", "openrouter/gpt-oss-120b"],
+    // "auto" scored 100/100 in the bake-off (1.4s first byte) — first VPS-local backup.
+    models: ["auto", "moonshotai/Kimi-K3"],
+  },
+  {
+    id: "nvidia",
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    keyEnv: "NVIDIA_API_KEY",
+    // 2026-09-21 bake-off: super-120b answered fast but skipped the tool call (narrator
+    // tendency) — backup only. OpenRouter :free twins are 404 (retired) — never listed here.
+    models: ["nvidia/nemotron-3-super-120b-a12b"],
   },
   {
     id: "omniroute",
