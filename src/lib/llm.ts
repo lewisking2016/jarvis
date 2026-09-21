@@ -157,6 +157,7 @@ export async function fetchCatalogFreeModels(apiKey: string): Promise<string[]> 
       id: string;
       context_length?: number;
       created?: number;
+      architecture?: { input_modalities?: string[] };
       supported_parameters?: string[];
       pricing?: { prompt?: string; completion?: string };
     }[];
@@ -172,7 +173,26 @@ export async function fetchCatalogFreeModels(apiKey: string): Promise<string[]> 
   );
   usable.sort((a, b) => (b.context_length ?? 0) - (a.context_length ?? 0) || (b.created ?? 0) - (a.created ?? 0));
   catalogCache = { ids: usable.map((m) => m.id), fetchedAt: now };
+  // Vision subset: models whose input modalities include image. Used to reorder
+  // the chain when the principal attaches images (a non-vision brain can't read them).
+  visionCatalogIds = new Set(
+    (json.data ?? [])
+      .filter((m) => m.id.endsWith(":free") && m.architecture?.input_modalities?.includes("image"))
+      .map((m) => m.id),
+  );
   return catalogCache.ids;
+}
+
+let visionCatalogIds: Set<string> | null = null;
+
+/** Model ids (any provider) known to accept image input, per the last catalog sync. */
+export function isVisionModel(providerId: string | undefined, modelId: string): boolean {
+  const bare = modelId.replace(/:free$/, "");
+  // Known-vision non-OpenRouter models (behavior-verified), plus the live catalog subset.
+  if (providerId === "nvidia" && /nemotron|mistral|llava|vl/i.test(modelId)) return false; // NIM free tier: text-only verified
+  if (providerId === "freellmapi" && /^auto$/i.test(modelId)) return false; // router target unknown — treat as text
+  if (visionCatalogIds?.has(modelId)) return true;
+  return /vision|vl|glm-4\.5v|qwen.*-vl|pixtral|llava|gemma-3|gemini/i.test(modelId);
 }
 
 function envChain(): string[] {
@@ -188,7 +208,7 @@ function envChain(): string[] {
  * → [static FREE_MODEL_CHAIN]. Models with an open breaker are pushed to the end (not
  * dropped) so a cooled-down breaker still provides last-resort coverage.
  */
-export async function rankedChain(): Promise<{ chain: PoolCandidate[]; catalogLive: boolean }> {
+export async function rankedChain(opts: { preferVision?: boolean } = {}): Promise<{ chain: PoolCandidate[]; catalogLive: boolean }> {
   const key = openRouterKey();
   let catalogLive = false;
 
@@ -227,7 +247,15 @@ export async function rankedChain(): Promise<{ chain: PoolCandidate[]; catalogLi
 
   const open = chain.filter((c) => breakerOpen(candidateKey(c)));
   const ready = chain.filter((c) => !breakerOpen(candidateKey(c)));
-  return { chain: [...ready, ...open], catalogLive };
+  let finalChain = [...ready, ...open];
+  // Attachments present: vision-capable brains lead (a text-only brain cannot read
+  // the image and will hallucinate or refuse — worse than a slower vision model).
+  if (opts.preferVision) {
+    const sees = finalChain.filter((c) => isVisionModel(c.provider?.id, c.id));
+    const blind = finalChain.filter((c) => !isVisionModel(c.provider?.id, c.id));
+    finalChain = [...sees, ...blind];
+  }
+  return { chain: finalChain, catalogLive };
 }
 
 /* ── Error classification ───────────────────────────────────────────────────────

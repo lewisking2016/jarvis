@@ -558,7 +558,7 @@ async function runOpenAIPool(
   mcp: McpTool[],
   onFailover: (from: string, to: string, reason: string) => void
 ): Promise<{ text: string; provider: string }> {
-  const { chain } = await rankedChain();
+  const { chain } = await rankedChain({ preferVision: Boolean(opts.attachmentParts?.length) });
   const openRouterKey = process.env.OPENROUTER_API_KEY ?? process.env.JARVIS_API_KEY ?? "";
   const skipProvider = new Set<string>(); // account-level daily caps skip the rest of a provider
   const label = (c: PoolCandidate): string => (c.provider ? `${c.provider.id}:${c.id}` : c.id);
