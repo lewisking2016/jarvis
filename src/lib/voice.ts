@@ -137,7 +137,8 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
   if (styleIdx >= 0) text = text.slice(styleIdx).replace(/^STYLE\s*PROFILE\s*:\s*/i, "");
   else {
     const paras = text.split(/\n\s*\n/);
-    while (paras.length > 1 && /^(the user|i (need|will|'ll| have)|let me|analyz|samples? (analysis|are)|here (is|'s) (the|a) (style|analysis))/i.test(paras[0].trim())) paras.shift();
+    const META = /^(the user|we need|we ('ll|will|have|can)|i (need|will|'ll| have)|let me|analyz|samples? (analysis|are|below|show)|here (is|'s)|first,|\- greetings|greetings\/openers)/i;
+    while (paras.length > 1 && META.test(paras[0].trim())) paras.shift();
     text = paras.join("\n\n");
   }
 
