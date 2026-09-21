@@ -423,6 +423,23 @@ async function streamOpenAIOnce(
  * Walks the ranked free-model chain across ALL configured providers. Every failure trips
  * the failed model's breaker and hands the turn to the next brain — the conversation never dies.
  */
+/**
+ * QUALITY GATE — some free "reasoning" models leak interleaved thinking tokens
+ * into content, producing garbled narration ("Ochien2 × 10 cameras + 1000
+ * installation41") or empty replies while claiming success. When an attempt
+ * produced NO tool executions and the text fails the garble heuristics, treat
+ * it as a brain failure and walk the chain. Attempts WITH tool work always
+ * pass — actions are real even when narration is rough, and retrying would
+ * duplicate them.
+ */
+function garbleScore(text: string): number {
+  if (!text) return 0;
+  const fusedDigits = (text.match(/[a-z]{3,}\d/gi) ?? []).length; // letters fused to digits mid-word ("Ochien2", "installation41")
+  const fusedWords = (text.match(/[a-z]{4,}[A-Z][a-z]{3,}/g) ?? []).length; // words smashed together ("dueCreated")
+  const total = fusedDigits + fusedWords;
+  return total >= 3 ? 2 : fusedDigits >= 2 ? 1 : 0;
+}
+
 async function runOpenAIPool(
   opts: RunOpts,
   builtin: ToolDef[],
@@ -454,6 +471,17 @@ async function runOpenAIPool(
     };
     try {
       const text = await streamOpenAIOnce(opts, model, baseUrl, apiKey, builtin, mcp, countingOnEvent);
+      // Quality gate: no tool work + garbled/empty narration = a narrator brain — fail over.
+      if (toolEvents === 0 && (text.trim().length === 0 || garbleScore(text) >= 2)) {
+        tripBreaker(candidateKey(cand));
+        opts.onEvent({ type: "reset" }); // wipe the garbled partial text from the console
+        const next = chain[i + 1];
+        if (!next) throw new Error(`brain produced garbled output: ${text.slice(0, 80) || "(empty)"}`);
+        const why = text.trim().length === 0 ? "empty reply, no tool work" : "garbled narration, no tool work";
+        lastErr = new Error(why);
+        onFailover(label(cand), label(next), why);
+        continue;
+      }
       return { text, provider: label(cand) };
     } catch (err) {
       if (opts.signal?.aborted) throw err;

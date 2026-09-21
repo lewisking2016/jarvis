@@ -13,6 +13,7 @@ export type AgentEvent =
   | { type: "tool_start"; name: string; args: unknown }
   | { type: "tool_end"; name: string; ok: boolean; summary: string }
   | { type: "failover"; from: string; to: string; reason: string }
+  | { type: "reset" }
   | { type: "done" }
   | { type: "error"; message: string };
 

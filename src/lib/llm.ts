@@ -20,13 +20,13 @@ export const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
  *  they are handled by the breaker + classifier, never by trusting the catalog blindly. */
 export const FREE_MODEL_CHAIN = [
   "nvidia/nemotron-3.5-lightning:free", // 1,048,576 ctx — fast, verified tools
-  "nvidia/nemotron-3-ultra-550b-a55b:free", // 1,048,576 ctx — frontier reasoning
   "dots-studio/dots-3-note-preview:free", // 524,288 ctx
   "inclusionai/ling-3.0-flash-vl:free", // 262,144 ctx — vision
   "nex-agi/nex-n2.5-mini:free", // 262,144 ctx
   "inclusionai/ling-3.0-flash-fin:free", // 262,144 ctx
   "inclusionai/ling-3.0-flash-sante:free", // 262,144 ctx
   "nex-agi/nex-n2.5-pro:free", // 262,144 ctx
+  "nvidia/nemotron-3-ultra-550b-a55b:free", // LAST RESORT — leaks interleaved thinking into content (garbled narration); only when everything else is capped
   "qwen/qwen3.8-27b:free", // 262,144 ctx
   "poolside/laguna-s-2.1:free", // 262,144 ctx
 ] as const;

@@ -76,6 +76,13 @@ export function useJarvisChat() {
               c[c.length - 1] = { ...last, tools };
               return c;
             });
+          } else if (ev.type === "reset") {
+            // Brain failed over after narrating garbage — wipe the partial text, keep tools/failover notes.
+            setBubbles((b) => {
+              const c = [...b];
+              c[c.length - 1] = { ...c[c.length - 1], text: "" };
+              return c;
+            });
           } else if (ev.type === "failover" && ev.from && ev.to) {
             setBubbles((b) => {
               const c = [...b];
