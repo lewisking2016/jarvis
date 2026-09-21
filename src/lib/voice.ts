@@ -130,6 +130,16 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
     } catch { /* next brain */ }
   }
   if (!text) return null;
+  // Reasoning models leak meta-analysis ("The user wants… I need to analyze…").
+  // Keep only the actual profile: prefer text after a STYLE marker, else drop
+  // leading meta sentences.
+  const styleIdx = text.search(/STYLE\s*PROFILE\s*:/i);
+  if (styleIdx >= 0) text = text.slice(styleIdx).replace(/^STYLE\s*PROFILE\s*:\s*/i, "");
+  else {
+    const paras = text.split(/\n\s*\n/);
+    while (paras.length > 1 && /^(the user|i (need|will|'ll| have)|let me|analyz|samples? (analysis|are)|here (is|'s) (the|a) (style|analysis))/i.test(paras[0].trim())) paras.shift();
+    text = paras.join("\n\n");
+  }
 
   const voice: WritingVoice = {
     learned_at: new Date().toISOString(),
