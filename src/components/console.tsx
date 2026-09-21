@@ -323,50 +323,83 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
       u.onstart = () => setSpeakState("speaking");
       window.speechSynthesis.speak(u);
     };
-    const pump = (): void => {
-      const chunk = queueRef.current.shift();
-      if (chunk === undefined) {
-        pumpingRef.current = false;
-        setSpeakState("idle");
-        return;
-      }
-      void (async () => {
-        try {
-          const res = await fetch(apiUrl("/api/voice"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: chunk }),
-          });
-          if (!res.ok) throw new Error(`voice ${res.status}`);
-          const url = URL.createObjectURL(await res.blob());
-          const audio = audioRef.current ?? new Audio();
-          audioRef.current = audio;
-          audio.src = url;
-          audio.onended = () => {
-            URL.revokeObjectURL(url);
-            pump();
-          };
-          audio.onerror = () => {
-            URL.revokeObjectURL(url);
-            browserFallback(chunk);
-            pump();
-          };
-          setSpeakState("speaking");
-          await audio.play();
-        } catch {
-          browserFallback(chunk);
-          pump();
+    // fetch one chunk of speech audio
+    const fetchTts = async (chunk: string): Promise<string> => {
+      const res = await fetch(apiUrl("/api/voice"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: chunk }),
+      });
+      if (!res.ok) throw new Error(`voice ${res.status}`);
+      return URL.createObjectURL(await res.blob());
+    };
+    // PIPELINED PUMP — never dead air between sentences: while chunk N is playing,
+    // chunk N+1 is already being fetched; when N ends, N+1 starts instantly. A
+    // chunk is always in exactly one of: queue → in-flight prefetch → nextSlot.
+    let nextSlot: { url: string; chunk: string } | null = null;
+    let prefetching = false;
+    const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+    const startPrefetch = (): void => {
+      if (prefetching || nextSlot || queueRef.current.length === 0) return;
+      const c = queueRef.current.shift()!;
+      prefetching = true;
+      void fetchTts(c)
+        .then((url) => {
+          nextSlot = { url, chunk: c };
+        })
+        .catch(() => {
+          browserFallback(c); // TTS endpoint failed — don't drop the sentence
+        })
+        .finally(() => {
+          prefetching = false;
+        });
+    };
+    const playAndWait = (slot: { url: string; chunk: string }): Promise<void> =>
+      new Promise<void>((resolve) => {
+        const audio = audioRef.current ?? new Audio();
+        audioRef.current = audio;
+        audio.src = slot.url;
+        audio.onended = () => {
+          URL.revokeObjectURL(slot.url);
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(slot.url);
+          browserFallback(slot.chunk);
+          resolve();
+        };
+        setSpeakState("speaking");
+        void audio.play().catch(() => {
+          browserFallback(slot.chunk);
+          resolve();
+        });
+      });
+    const pump = async (): Promise<void> => {
+      for (;;) {
+        startPrefetch(); // keep the next sentence loading while the current one speaks
+        if (!nextSlot) {
+          if (!prefetching) {
+            pumpingRef.current = false;
+            setSpeakState("idle");
+            return;
+          }
+          await sleep(40); // in-flight prefetch — give it a beat to land
+          continue;
         }
-      })();
+        const slot = nextSlot;
+        nextSlot = null;
+        await playAndWait(slot);
+      }
     };
     speakRef.current = (text: string) => {
       if (!voiceOn || typeof window === "undefined") return;
       const clean = text.replace(/[*_#`>]/g, " ").trim();
       if (!clean) return;
       queueRef.current.push(clean.slice(0, 2000));
+      startPrefetch(); // begin fetching audio the instant a sentence exists
       if (!pumpingRef.current) {
         pumpingRef.current = true;
-        pump();
+        void pump();
       }
     };
   }, [voiceOn]);
@@ -400,15 +433,23 @@ export function useVoice(chat: ReturnType<typeof useJarvisChat>) {
       spokenLenRef.current = end;
     };
     if (chat.busy) {
-      // stream: speak sentence-by-sentence as soon as a full sentence exists
-      if (voiceOn && text.length - spokenLenRef.current >= 40) {
+      // stream: speak each sentence the moment it completes — first words start
+      // ~1s into the stream, not after it. Long unpunctuated runs flush on a
+      // word boundary so rambling lists still talk promptly.
+      const pending = text.length - spokenLenRef.current;
+      if (pending >= 14) {
         const punct = Math.max(
-          text.lastIndexOf(". ", spokenLenRef.current + 20),
-          text.lastIndexOf("! ", spokenLenRef.current + 20),
-          text.lastIndexOf("? ", spokenLenRef.current + 20),
-          text.lastIndexOf("\n", spokenLenRef.current + 20)
+          text.lastIndexOf(". ", spokenLenRef.current + 10),
+          text.lastIndexOf("! ", spokenLenRef.current + 10),
+          text.lastIndexOf("? ", spokenLenRef.current + 10),
+          text.lastIndexOf("; ", spokenLenRef.current + 10),
+          text.lastIndexOf("\n", spokenLenRef.current + 10)
         );
         if (punct > spokenLenRef.current) flushTo(punct + 1);
+        else if (pending >= 90) {
+          const sp = text.lastIndexOf(" ", text.length - 2);
+          if (sp > spokenLenRef.current) flushTo(sp);
+        }
       }
     } else if (text.length > spokenLenRef.current) {
       flushTo(text.length);

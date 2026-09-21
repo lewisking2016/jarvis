@@ -1,6 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import type { ToolDecl } from "./types";
 
@@ -33,6 +33,41 @@ export function loadMcpConfig(): McpConfigFile {
     return { mcpServers: {} };
   } catch {
     return { mcpServers: {} };
+  }
+}
+
+function saveMcpConfig(cfg: McpConfigFile): void {
+  writeFileSync(MCP_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
+}
+
+/** Add (or replace) an MCP server and drop its cached client so it reconnects fresh. */
+export async function addMcpServer(name: string, command: string, args: string[], env?: Record<string, string>): Promise<void> {
+  const clean = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+  if (!clean) throw new Error("server name required");
+  const cfg = loadMcpConfig();
+  cfg.mcpServers[clean] = { command, args, env };
+  saveMcpConfig(cfg);
+  await removeClient(clean);
+}
+
+export async function removeMcpServer(name: string): Promise<boolean> {
+  const cfg = loadMcpConfig();
+  if (!(name in cfg.mcpServers)) return false;
+  delete cfg.mcpServers[name];
+  saveMcpConfig(cfg);
+  await removeClient(name);
+  return true;
+}
+
+async function removeClient(name: string): Promise<void> {
+  const client = clients.get(name);
+  if (client) {
+    try {
+      await client.close();
+    } catch {
+      /* already gone */
+    }
+    clients.delete(name);
   }
 }
 
@@ -92,7 +127,8 @@ export async function discoverMcpTools(): Promise<{ tools: McpTool[]; errors: st
   return { tools, errors };
 }
 
-export async function shutdownMcp(): Promise<void> {
+/** Forget cached clients (and their tools) so the next discovery reconnects. */
+export async function resetMcpCache(): Promise<void> {
   for (const [name, client] of clients) {
     try {
       await client.close();

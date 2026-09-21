@@ -16,6 +16,7 @@ const NAV = [
   { href: "/outreach", label: "Outbound", icon: "➤" },
   { href: "/memory", label: "Memory Core", icon: "◈" },
   { href: "/fleet", label: "Fleet & MCP", icon: "⬡" },
+{ href: "/connections", label: "Connections", icon: "⊕" },
   { href: "/approvals", label: "Approvals", icon: "✓" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];

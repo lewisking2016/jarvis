@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { BUILT_IN_TOOLS } from "./tools";
 import { SKILL_TOOLS } from "./skills";
+import { REACH_TOOLS } from "./reach";
 import { discoverMcpTools, type McpTool } from "./mcp";
 import { buildSystemPrompt } from "./system";
 import { memoryHeader, remember } from "./memory";
@@ -61,7 +62,7 @@ interface RunOpts {
 let cachedMcpTools: McpTool[] | null = null;
 
 export async function allTools(): Promise<{ builtin: ToolDef[]; mcp: McpTool[] }> {
-  const builtin = [...BUILT_IN_TOOLS, ...SKILL_TOOLS];
+  const builtin = [...BUILT_IN_TOOLS, ...SKILL_TOOLS, ...REACH_TOOLS];
   if (!cachedMcpTools) {
     const { tools } = await discoverMcpTools();
     cachedMcpTools = tools;
