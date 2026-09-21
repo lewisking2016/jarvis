@@ -122,7 +122,7 @@ ${samples.map((s, i) => `[${i + 1}] ${s}`).join("\n\n")}`;
   const geminiKey = (process.env.GEMINI_API_KEY ?? "").trim();
   if (geminiKey) {
     try {
-      const model = (process.env.JARVIS_MODEL ?? "gemini-2.5-flash").replace(/^models\//, "");
+      const model = (process.env.JARVIS_GEMINI_MODEL ?? "gemini-3.1-flash-lite").replace(/^models\//, "");
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
