@@ -394,8 +394,10 @@ async function streamOpenAIOnce(
       }
     }
 
-    // No tool calls — if the model promised action without taking it, force execution once.
-    if (!correctiveUsed && roundText.trim() && NARRATION_RE.test(roundText)) {
+    // No tool calls — if the model promised action ("I will create…") or FABRICATED a
+    // completed result ("QTE-2026-0003 created"), force real execution once before
+    // the pool gives up on this brain.
+    if (!correctiveUsed && roundText.trim() && (NARRATION_RE.test(roundText) || FABRICATION_RE.test(roundText))) {
       correctiveUsed = true;
       logActivity("AGENT_NUDGE", roundText.slice(0, 120));
       messages.push({ role: "assistant", content: roundText });
@@ -454,6 +456,12 @@ function garbleScore(text: string): number {
   const total = fusedDigits + fusedWords;
   return total >= 3 ? 2 : fusedDigits >= 2 ? 1 : 0;
 }
+
+/** Claims a COMPLETED action or document number with no tool behind it — fabricated
+ *  results ("QTE-2026-0003 created…", "Done, sir, invoice issued"). Narrow on purpose:
+ *  ordinary answers that merely mention past events must not trip it. */
+const FABRICATION_RE =
+  /\b(?:QTE|QUO|INV|RCP|RCPT)-?\s?\d{2,}|\bI\s+(?:created|recorded|issued|saved|sent|scheduled)\b|^\s*(?:done|created|recorded|issued|saved)\b[,:—-]/i;
 
 /**
  * Human one-liner from a REAL tool result. Reads only fields the tool actually
@@ -516,13 +524,16 @@ async function runOpenAIPool(
     };
     try {
       const text = await streamOpenAIOnce(opts, model, baseUrl, apiKey, builtin, mcp, countingOnEvent);
-      // Quality gate: no tool work + garbled/empty narration = a narrator brain — fail over.
-      if (toolEvents === 0 && (text.trim().length === 0 || garbleScore(text) >= 2)) {
+      // Quality gate: with NO tool work, an attempt fails if the narration is empty,
+      // garbled, or CLAIMS an action/document that was never executed (doctrine:
+      // a promise without a tool call is a failure — treat the brain as broken).
+      const claimsAction = FABRICATION_RE.test(text);
+      if (toolEvents === 0 && (text.trim().length === 0 || garbleScore(text) >= 2 || claimsAction)) {
         tripBreaker(candidateKey(cand));
         opts.onEvent({ type: "reset" }); // wipe the garbled partial text from the console
         const next = chain[i + 1];
         if (!next) throw new Error(`brain produced garbled output: ${text.slice(0, 80) || "(empty)"}`);
-        const why = text.trim().length === 0 ? "empty reply, no tool work" : "garbled narration, no tool work";
+        const why = text.trim().length === 0 ? "empty reply, no tool work" : garbleScore(text) >= 2 ? "garbled narration, no tool work" : "claimed an action it never executed";
         lastErr = new Error(why);
         onFailover(label(cand), label(next), why);
         continue;
