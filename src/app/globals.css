@@ -24,13 +24,24 @@ html, body { background: var(--bg); color: var(--ink); }
    Wide tables scroll inside their own panel instead of
    stretching the page; flex/grid children are allowed to
    shrink so long inputs can't force overflow. */
-html, body { overflow-x: hidden; max-width: 100vw; }
-.panel > *,
+html, body { overflow-x: hidden; overflow-x: clip; max-width: 100vw; }
+.panel, .panel > *,
 .grid > *,
-.flex > * { min-width: 0; }
+.flex > * { min-width: 0; max-width: 100%; }
 .input, select.input, textarea.input { box-sizing: border-box; max-width: 100%; }
 .panel:has(.dtable) { overflow-x: auto; }
 .dtable { min-width: 560px; }
+.dtable td { word-break: break-word; }
+
+/* ── form polish ──────────────────────────────────────
+   Labels above fields, dark-native pickers, right-aligned
+   numeric entry so KES amounts line up while typing. */
+label.k { display: block; margin-bottom: 3px; }
+select.input { appearance: none; }
+select.input option { background: var(--bg-panel); color: var(--ink); }
+.input[type="date"] { color-scheme: dark; }
+.input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+input.input.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* ── ambient background ─────────────────────────────── */
 .hud-root {

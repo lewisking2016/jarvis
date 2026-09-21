@@ -45,8 +45,8 @@ export function Empty({ text }: { text: string }) {
 
 export function PageHeader({ title, sub, right }: { title: string; sub: string; right?: ReactNode }) {
   return (
-    <div className="flex items-end justify-between mb-4">
-      <div>
+    <div className="flex flex-wrap items-end justify-between gap-2 mb-4">
+      <div className="min-w-0">
         <h1 className="mono text-sm tracking-[0.3em] uppercase text-cyan-300 glow">{title}</h1>
         <p className="text-xs text-slate-500 mt-1">{sub}</p>
       </div>

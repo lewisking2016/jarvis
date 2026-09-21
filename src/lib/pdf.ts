@@ -206,11 +206,23 @@ export function renderDocumentPdf(doc: DocRow): Promise<Buffer> {
         const ph = 86;
         pdf.roundedRect(L, y, CW, ph, 5).fillAndStroke(SOFT, LINE);
         pdf.fillColor(ACCENT_DARK).font("Helvetica-Bold").fontSize(8).text("PAYMENT DETAILS", L + 14, y + 10);
+        const isBank = (doc.payment_info ?? "").startsWith("BANK · ");
+        const payCode = doc.payment_info ? doc.payment_info.replace(/^(M-PESA · |BANK · )/, "") : "";
         pdf.font("Helvetica").fontSize(9).fillColor(INK)
-          .text("Amount due (KES):  " + fmt(doc.total), L + 14, y + 27)
-          .text("Pay via M-PESA — Paybill/Till:  " + (doc.payment_info || "to be advised"), L + 14, y + 42)
+          .text((isReceipt ? "Amount received (KES):  " : "Amount due (KES):  ") + fmt(doc.total), L + 14, y + 27)
+          .text(
+            isBank
+              ? "Channel:  BANK TRANSFER — Code/Reference:  " + (payCode || "to be advised")
+              : "Channel:  M-PESA — Paybill/Till:  " + (payCode || "to be advised"),
+            L + 14, y + 42,
+          )
           .text("Account reference:  " + doc.number, L + 14, y + 57)
-          .text("Bank transfer:  IMT General System — details on request (info@imeantech.com)", L + 14, y + 72);
+          .text(
+            isBank
+              ? "Alternative:  M-PESA accepted — Paybill/Till on request (info@imeantech.com)"
+              : "Alternative:  Bank transfer — IMT GENERAL SYSTEM (info@imeantech.com)",
+            L + 14, y + 72,
+          );
         y += ph + 16;
       }
 

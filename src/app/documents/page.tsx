@@ -42,7 +42,8 @@ interface FormState {
   due_date: string;
   tax_rate: string;
   status: string;
-  payment_info: string;
+  pay_method: "MPESA" | "BANK";
+  pay_code: string;
   items: ItemRow[];
 }
 
@@ -54,7 +55,8 @@ const EMPTY_FORM: FormState = {
   due_date: "",
   tax_rate: "16",
   status: "draft",
-  payment_info: "",
+  pay_method: "MPESA",
+  pay_code: "",
   items: [{ description: "", qty: "1", unit_price: "" }],
 };
 
@@ -102,7 +104,8 @@ export default function DocumentsPage() {
       due_date: d.due_date?.slice(0, 10) ?? "",
       tax_rate: String(d.tax_rate ?? 0),
       status: d.status,
-      payment_info: d.payment_info ?? "",
+      pay_method: d.payment_info?.startsWith("BANK · ") ? "BANK" : "MPESA",
+      pay_code: d.payment_info?.replace(/^(M-PESA · |BANK · )/, "") ?? "",
       items: (d.items ?? []).map((i) => ({ description: i.description, qty: String(i.qty), unit_price: String(i.unit_price) })),
     });
     setMsg(null);
@@ -132,7 +135,12 @@ export default function DocumentsPage() {
         tax_rate: num(form.tax_rate),
         status: form.status,
         due_date: form.due_date || undefined,
-        payment_info: form.payment_info || undefined,
+        payment_info:
+          form.kind === "INVOICE" || form.kind === "RECEIPT"
+            ? form.pay_code.trim()
+              ? (form.pay_method === "MPESA" ? "M-PESA · " : "BANK · ") + form.pay_code.trim()
+              : undefined
+            : undefined,
       };
       const r = await apiFetch<{ document?: { number?: string } }>("/api/documents", {
         method: form.id !== null ? "PATCH" : "POST",
@@ -253,27 +261,64 @@ export default function DocumentsPage() {
                   ))}
                 </div>
               )}
-              <input className="input w-full" placeholder="Client *" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
-              <input className="input w-full" placeholder="Client phone (+2547…)" value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
+              <p className="k" style={{ marginBottom: 3 }}>Client</p>
+              <input className="input w-full" placeholder="Client name *" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} />
+              <div style={{ height: 6 }} />
+              <p className="k" style={{ marginBottom: 3 }}>Phone (for M-Pesa receipts)</p>
+              <input className="input w-full" placeholder="Client phone — +2547…" value={form.client_phone} onChange={(e) => setForm({ ...form, client_phone: e.target.value })} />
+              <div style={{ height: 6 }} />
               <div className="flex gap-2">
-                <input className="input flex-1 min-w-0" type="date" title="Due date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
-                <select className="input flex-1 min-w-0" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s} className="bg-slate-900">{s}</option>
-                  ))}
-                </select>
+                <div className="flex-1 min-w-0">
+                  <p className="k" style={{ marginBottom: 3 }}>Due date</p>
+                  <input className="input w-full" type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="k" style={{ marginBottom: 3 }}>Status</p>
+                  <select className="input w-full" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {(form.kind === "INVOICE" || form.kind === "RECEIPT") && (
-                <input
-                  className="input w-full min-w-0"
-                  placeholder="Payment code — M-Pesa paybill/till number"
-                  inputMode="numeric"
-                  value={form.payment_info}
-                  onChange={(e) => setForm({ ...form, payment_info: e.target.value })}
-                />
+                <>
+                  <div style={{ height: 6 }} />
+                  <p className="k" style={{ marginBottom: 3 }}>Money — payment channel & code</p>
+                  <div className="flex gap-1" role="group" aria-label="Payment channel">
+                    {(["MPESA", "BANK"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        className={`btn flex-1 ${form.pay_method === m ? "text-cyan-300" : ""}`}
+                        style={form.pay_method === m ? { borderColor: "rgba(34,211,238,0.55)", background: "rgba(34,211,238,0.1)" } : undefined}
+                        onClick={() => setForm({ ...form, pay_method: m })}
+                      >
+                        {m === "MPESA" ? "M-PESA" : "BANK"}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ height: 6 }} />
+                  <input
+                    className="input w-full num"
+                    inputMode="numeric"
+                    placeholder={form.pay_method === "MPESA" ? "Paybill / till number" : "Bank code / account reference"}
+                    value={form.pay_code}
+                    onChange={(e) => setForm({ ...form, pay_code: e.target.value })}
+                  />
+                  <p className="mono text-[10px] mt-1" style={{ color: "var(--ink-faint)" }}>
+                    KES {fmt(grand)} {form.pay_method === "MPESA" ? "via M-Pesa" : "via bank transfer"} — prints on the PDF payment block
+                  </p>
+                </>
               )}
 
-              <p className="k pt-1">Line items</p>
+              <p className="k" style={{ margin: "10px 0 3px" }}>Line items — KES</p>
+              <div className="flex gap-1 px-0.5">
+                <span className="k" style={{ flex: 3 }}>Item</span>
+                <span className="k num" style={{ flex: 1, textAlign: "right" }}>Qty</span>
+                <span className="k num" style={{ flex: 1.5, textAlign: "right" }}>Price (KES)</span>
+                <span style={{ flex: "0 0 30px" }} />
+              </div>
               {form.items.map((it, idx) => (
                 <div key={idx} className="flex gap-1">
                   <input
@@ -313,13 +358,13 @@ export default function DocumentsPage() {
               </button>
 
               <div className="flex gap-2 items-center pt-1">
-                <span className="k">tax %</span>
-                <input className="input flex-1 num" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
-                <span className="k">subtotal</span>
-                <span className="num text-sm text-cyan-300">{fmt(subtotal)}</span>
+                <span className="k">Tax %</span>
+                <input className="input w-14 num" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+                <span className="k">Subtotal</span>
+                <span className="num text-sm text-cyan-300">KES {fmt(subtotal)}</span>
               </div>
-              <div className="flex justify-between items-center">
-                <span className="k">TOTAL</span>
+              <div className="flex justify-between items-center border-t pt-1" style={{ borderColor: "var(--line)" }}>
+                <span className="k">Total — KES</span>
                 <span className="num text-lg text-amber-300 glow-gold">{fmt(grand)}</span>
               </div>
 
