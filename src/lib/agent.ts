@@ -577,12 +577,16 @@ async function runOpenAIPool(
       // garbled, or CLAIMS an action/document that was never executed (doctrine:
       // a promise without a tool call is a failure — treat the brain as broken).
       const claimsAction = FABRICATION_RE.test(text);
-      if (toolEvents === 0 && (text.trim().length === 0 || garbleSignals(text) >= 2 || garbleScore(text) >= 2 || claimsAction)) {
+      // NO-TOOL attempts (conversation, analysis) have nothing to rescue from and
+      // nothing to duplicate — so ANY scramble signal fails the brain and the walk
+      // tries the next one. A false positive costs one hop; a scrambled reply costs
+      // the principal's trust.
+      if (toolEvents === 0 && (text.trim().length === 0 || garbleSignals(text) >= 1 || claimsAction)) {
         tripBreaker(candidateKey(cand));
         opts.onEvent({ type: "reset" }); // wipe the garbled partial text from the console
         const next = chain[i + 1];
         if (!next) throw new Error(`brain produced garbled output: ${text.slice(0, 80) || "(empty)"}`);
-        const why = text.trim().length === 0 ? "empty reply, no tool work" : garbleSignals(text) >= 2 || garbleScore(text) >= 2 ? "garbled narration, no tool work" : "claimed an action it never executed";
+        const why = text.trim().length === 0 ? "empty reply, no tool work" : garbleSignals(text) >= 1 ? "scrambled narration, no tool work" : "claimed an action it never executed";
         lastErr = new Error(why);
         onFailover(label(cand), label(next), why);
         continue;
